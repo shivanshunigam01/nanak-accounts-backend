@@ -27,17 +27,13 @@ app.use(helmet());
 app.use(morgan('dev'));
 
 // CORS
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-    credentials: true,
-  })
-);
+app.use(cors());
+
 
 // Rate limiting (simple default)
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: 15 * 60 * 1000, 
     max: 300,
     standardHeaders: true,
     legacyHeaders: false,

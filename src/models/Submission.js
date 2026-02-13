@@ -27,7 +27,7 @@ const submissionSchema = new mongoose.Schema(
     serviceKey: { type: String, required: true, index: true },
     serviceName: { type: String, required: true },
     customerName: { type: String, required: true, index: true },
-    email: { type: String, required: true, lowercase: true, index: true },
+    email: { type: String, required: false, lowercase: true, index: true },
     phone: { type: String, required: true },
 
     formData: { type: mongoose.Schema.Types.Mixed, required: true, default: {} },

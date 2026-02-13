@@ -72,6 +72,111 @@ const submitForm = asyncHandler(async (req, res) => {
  * POST /api/checkout/submit
  * multipart/form-data with "payload" JSON string + files
  */
+// 🔥 Universal email resolver for all services
+function resolvePrimaryEmail(customer) {
+  if (!customer) return null;
+
+  // Direct known fields
+  if (customer.email) return customer.email;
+  if (customer.appointorEmail) return customer.appointorEmail;
+  if (customer.iaContactEmail) return customer.iaContactEmail;
+
+  // Charity CLG
+  if (customer.clgDirectors?.[0]?.email)
+    return customer.clgDirectors[0].email;
+
+  if (customer.clgMembers?.[0]?.email)
+    return customer.clgMembers[0].email;
+
+  // Trust / Company / SMSF patterns
+  if (customer.directors?.[0]?.email)
+    return customer.directors[0].email;
+
+  if (customer.shareholders?.[0]?.email)
+    return customer.shareholders[0].email;
+
+  if (customer.beneficiaries?.[0]?.email)
+    return customer.beneficiaries[0].email;
+
+  if (customer.iaCommitteeMembers?.[0]?.email)
+    return customer.iaCommitteeMembers[0].email;
+
+  // 🔥 Final fallback – deep scan for first valid email
+  const stack = [customer];
+
+  while (stack.length) {
+    const current = stack.pop();
+    for (const key in current) {
+      const value = current[key];
+
+      if (
+        typeof value === "string" &&
+        value.includes("@") &&
+        value.includes(".")
+      ) {
+        return value;
+      }
+
+      if (typeof value === "object" && value !== null) {
+        stack.push(value);
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolvePrimaryPhone(customer) {
+  if (!customer) return null;
+
+  if (customer.phone) return customer.phone;
+  if (customer.appointorPhone) return customer.appointorPhone;
+  if (customer.iaContactPhone) return customer.iaContactPhone;
+
+  // Charity CLG
+  if (customer.clgDirectors?.[0]?.phone)
+    return customer.clgDirectors[0].phone;
+
+  if (customer.clgMembers?.[0]?.phone)
+    return customer.clgMembers[0].phone;
+
+  // Trust / Company / SMSF
+  if (customer.directors?.[0]?.phone)
+    return customer.directors[0].phone;
+
+  if (customer.shareholders?.[0]?.phone)
+    return customer.shareholders[0].phone;
+
+  if (customer.beneficiaries?.[0]?.phone)
+    return customer.beneficiaries[0].phone;
+
+  if (customer.iaCommitteeMembers?.[0]?.phone)
+    return customer.iaCommitteeMembers[0].phone;
+
+  // 🔥 Deep scan fallback
+  const stack = [customer];
+
+  while (stack.length) {
+    const current = stack.pop();
+    for (const key in current) {
+      const value = current[key];
+
+      if (
+        typeof value === "string" &&
+        value.match(/^\d{6,}$/) // basic phone-like check
+      ) {
+        return value;
+      }
+
+      if (typeof value === "object" && value !== null) {
+        stack.push(value);
+      }
+    }
+  }
+
+  return null;
+}
+
 const checkoutSubmit = asyncHandler(async (req, res) => {
   const payloadStr = req.body.payload;
   if (!payloadStr) {
@@ -85,13 +190,70 @@ const checkoutSubmit = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid payload JSON' });
   }
 
-  const { serviceKey, customer, selections, pricing, meta } = payload;
-  if (!serviceKey) return res.status(400).json({ success: false, message: 'serviceKey required' });
-  if (!customer || !customer.email) return res.status(400).json({ success: false, message: 'customer.email required' });
-  if (!pricing || typeof pricing.total !== 'number') return res.status(400).json({ success: false, message: 'pricing.total required' });
+  const { serviceKey, customer = {}, selections = {}, pricing, meta } = payload;
 
-  const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || payload.customerName || 'Customer';
-  const phone = customer.phone || payload.phone || '';
+  if (!serviceKey) {
+    return res.status(400).json({ success: false, message: 'serviceKey required' });
+  }
+
+  if (!pricing || typeof pricing.total !== 'number') {
+    return res.status(400).json({ success: false, message: 'pricing.total required' });
+  }
+
+
+// 🔥 Resolve primary email dynamically
+let primaryEmail = resolvePrimaryEmail(customer);
+
+// 🔥 Bare Trust fallback logic
+if (!primaryEmail && serviceKey === "bare_trust") {
+  primaryEmail =
+    customer.email ||
+    customer.cardholderEmail ||
+    (customer.signature && customer.signature.includes("@")
+      ? customer.signature
+      : null);
+}
+
+// 🔥 Absolute fallback (system placeholder)
+if (!primaryEmail && serviceKey === "bare_trust") {
+  primaryEmail = "baretrust@system.local";
+}
+
+if (!primaryEmail) {
+  return res.status(400).json({
+    success: false,
+    message: 'customer.email required',
+  });
+}
+
+
+
+  if (!primaryEmail) {
+    return res.status(400).json({
+      success: false,
+      message: 'customer.email required',
+    });
+  }
+
+  // 🔥 Resolve primary phone dynamically
+let primaryPhone = resolvePrimaryPhone(customer);
+
+// 🔥 If phone not found, assign system fallback
+if (!primaryPhone) {
+  primaryPhone = "0000000000"; // fallback to satisfy mongoose required field
+}
+
+
+  // 🔥 Resolve customer name dynamically
+const customerName =
+  [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+  [customer.appointorFirstName, customer.appointorLastName].filter(Boolean).join(' ') ||
+  [customer.iaContactFirstName, customer.iaContactLastName].filter(Boolean).join(' ') ||
+  customer.directors?.[0]?.fullName ||
+  customer.iaCommitteeMembers?.[0]?.firstName + ' ' + customer.iaCommitteeMembers?.[0]?.lastName ||
+  payload.customerName ||
+  'Customer';
+
 
   const orderNumber = generateOrderNumber('NA');
 
@@ -108,25 +270,42 @@ const checkoutSubmit = asyncHandler(async (req, res) => {
     serviceKey,
     serviceName: getServiceName(serviceKey),
     customerName,
-    email: customer.email,
-    phone,
+    email: primaryEmail,
+    phone: primaryPhone,
     formData: { ...customer, meta },
-    selections: selections || {},
+    selections,
     packageType: selections?.packageType || payload.packageType || 'Standard',
     amount: Number(pricing.total),
-    paymentStatus: 'pending_payment',
+    paymentStatus: Number(pricing.total) === 0 ? 'pending' : 'pending_payment',
     jobStatus: 'new',
     files,
     activityLog: [
-      { action: 'created', description: 'Submission received', doneBy: 'System', timestamp: new Date() },
+      {
+        action: 'created',
+        description: 'Submission received',
+        doneBy: 'System',
+        timestamp: new Date(),
+      },
     ],
   });
 
+  // ✅ If free consultation (total = 0), skip Stripe
+  if (Number(pricing.total) === 0) {
+    return res.json({
+      success: true,
+      submissionId: submission._id,
+      message: 'Free consultation submitted successfully',
+    });
+  }
+
   const stripe = getStripe();
-  const origin = process.env.FRONTEND_ORIGIN || process.env.ADMIN_URL || 'http://localhost:5173';
+  const origin =
+    process.env.FRONTEND_ORIGIN ||
+    process.env.ADMIN_URL ||
+    'http://localhost:5173';
 
   const session = await stripe.checkout.sessions.create({
-    customer_email: customer.email,
+    customer_email: primaryEmail,
     line_items: [
       {
         price_data: {
@@ -160,6 +339,7 @@ const checkoutSubmit = asyncHandler(async (req, res) => {
     stripeSessionId: session.id,
   });
 });
+
 
 const createCheckoutSession = asyncHandler(async (req, res) => {
   const { submissionId, amount, currency, serviceName, customerEmail } = req.body;
