@@ -11,6 +11,8 @@ const { errorHandler } = require('./middleware/errorHandler');
 const authRoutes = require('./routes/auth.routes');
 const publicRoutes = require('./routes/public.routes');
 const webhookRoutes = require('./routes/webhooks.routes');
+const pricingRoutes = require('./routes/admin/pricing.routes');
+
 
 const dashboardRoutes = require('./routes/admin/dashboard.routes');
 const submissionsRoutes = require('./routes/admin/submissions.routes');
@@ -52,6 +54,10 @@ app.use(
     legacyHeaders: false,
   })
 );
+
+
+app.use('/admin/pricing', pricingRoutes);
+
 
 // Stripe webhooks MUST run before express.json (raw body required)
 app.use('/api', webhookRoutes);
