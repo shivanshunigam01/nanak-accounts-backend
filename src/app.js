@@ -32,16 +32,15 @@ app.use(
     origin: [
       "https://connect.cavaluer.com",
       "https://www.connect.cavaluer.com",
+      "https://nanak-admin.vercel.app",
       "http://localhost:3000",
       "http://localhost:8080",
       "http://localhost:8081",
-      "https://nanak-admin.vercel.app/",
-      "https://nanak-admin.vercel.app/login"
-
     ],
     credentials: true,
   })
 );
+
 
 
 // Rate limiting (simple default)
