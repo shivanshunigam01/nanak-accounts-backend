@@ -35,7 +35,8 @@ app.use(
       "http://localhost:3000",
       "http://localhost:8080",
       "http://localhost:8081",
-      "http://nanak-admin.vercel.app/"
+      "https://nanak-admin.vercel.app/",
+      "https://nanak-admin.vercel.app/login"
 
     ],
     credentials: true,
