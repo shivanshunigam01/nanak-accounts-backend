@@ -27,7 +27,19 @@ app.use(helmet());
 app.use(morgan('dev'));
 
 // CORS
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "https://connect.cavaluer.com",
+      "https://www.connect.cavaluer.com",
+      "http://localhost:3000",
+      "http://localhost:8080",
+      "http://localhost:8081"
+
+    ],
+    credentials: true,
+  })
+);
 
 
 // Rate limiting (simple default)
