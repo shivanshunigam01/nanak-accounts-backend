@@ -1,4 +1,4 @@
-const PricingService = require('../models/PricingService');
+const PricingService = require("../models/PricingService");
 
 // GET ALL
 exports.getAllServices = async (req, res) => {

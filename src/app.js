@@ -56,7 +56,7 @@ app.use(
 );
 
 
-app.use('/admin/pricing', pricingRoutes);
+app.use('/api/admin/pricing', pricingRoutes);
 
 
 // Stripe webhooks MUST run before express.json (raw body required)

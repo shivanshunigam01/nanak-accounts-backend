@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "seed": "node src/utils/seedAdmin.js"
+    "seed": "node src/utils/seedAdmin.js",
+      "seed:pricing": "node seeders/pricingSeeder.js"
   },
   "engines": {
     "node": ">=18.0.0"
