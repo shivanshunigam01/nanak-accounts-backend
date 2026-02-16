@@ -68,14 +68,23 @@ exports.createService = async (req, res) => {
 // UPDATE
 exports.updateService = async (req, res) => {
   try {
+    const { label, foundation, accounting } = req.body;
+
     const service = await PricingService.findOneAndUpdate(
       { key: req.params.key },
-      req.body,
-      { new: true }
+      {
+        $set: {
+          ...(label && { label }),
+          ...(foundation && { foundation }),
+          ...(accounting && { accounting }),
+        },
+      },
+      { new: true, runValidators: true }
     );
 
-    if (!service)
+    if (!service) {
       return res.status(404).json({ message: 'Service not found' });
+    }
 
     res.json({
       message: 'Service updated successfully',
@@ -88,6 +97,7 @@ exports.updateService = async (req, res) => {
     });
   }
 };
+
 
 // DELETE
 exports.deleteService = async (req, res) => {
