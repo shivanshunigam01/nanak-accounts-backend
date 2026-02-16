@@ -38,6 +38,7 @@ app.use(
       "http://localhost:3000",
       "http://localhost:8080",
       "http://localhost:8081",
+      "https://online.nanakaccountants.com.au", "https://admin.nanakaccountants.com.au"
     ],
     credentials: true,
   })
