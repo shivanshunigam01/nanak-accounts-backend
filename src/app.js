@@ -56,7 +56,6 @@ app.use(
 );
 
 
-app.use('/api/admin/pricing', pricingRoutes);
 
 
 // Stripe webhooks MUST run before express.json (raw body required)
@@ -73,6 +72,7 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'nanak-accounts-backend', timestamp: new Date().toISOString() });
 });
 
+app.use('/api/admin/pricing', pricingRoutes);
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes);
