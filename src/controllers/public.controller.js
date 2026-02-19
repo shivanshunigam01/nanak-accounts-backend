@@ -303,6 +303,7 @@ const customerName =
     process.env.FRONTEND_ORIGIN ||
     process.env.ADMIN_URL ||
     'http://localhost:5173';
+    let base = process.env.FRONTEND_ORIGIN || 'http://localhost:5000';
 
   const session = await stripe.checkout.sessions.create({
     customer_email: primaryEmail,
@@ -320,8 +321,8 @@ const customerName =
       },
     ],
     mode: 'payment',
-    success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/payment-cancelled?submission_id=${submission._id}`,
+    success_url: `${base}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${base}/payment-cancelled?submission_id=${submission._id}`,
     metadata: {
       submission_id: String(submission._id),
       service_key: serviceKey,
