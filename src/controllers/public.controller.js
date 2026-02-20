@@ -321,8 +321,8 @@ const customerName =
       },
     ],
     mode: 'payment',
-    success_url: `${base}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${base}/payment-cancelled?submission_id=${submission._id}`,
+    success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/payment-cancelled?submission_id=${submission._id}`,
     metadata: {
       submission_id: String(submission._id),
       service_key: serviceKey,
