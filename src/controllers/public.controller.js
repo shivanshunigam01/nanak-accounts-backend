@@ -343,42 +343,69 @@ const customerName =
 
 
 const createCheckoutSession = asyncHandler(async (req, res) => {
-  const { submissionId, amount, currency, serviceName, customerEmail } = req.body;
-  if (!submissionId || !amount || !customerEmail) {
-    return res.status(400).json({ success: false, message: 'submissionId, amount, customerEmail required' });
-  }
+  try {
+    const { submissionId, amount, currency, serviceName, customerEmail } = req.body;
 
-  const submission = await Submission.findById(submissionId);
-  if (!submission) return res.status(404).json({ success: false, message: 'Submission not found' });
+    if (!submissionId || !amount || !customerEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'submissionId, amount, customerEmail required',
+      });
+    }
 
-  const stripe = getStripe();
-  const origin = process.env.FRONTEND_ORIGIN || process.env.ADMIN_URL || 'http://localhost:5173';
+    const submission = await Submission.findById(submissionId);
 
-  const session = await stripe.checkout.sessions.create({
-    customer_email: customerEmail,
-    line_items: [
-      {
-        price_data: {
-          currency: (currency || process.env.CURRENCY || 'aud').toLowerCase(),
-          unit_amount: Math.round(Number(amount) * 100),
-          product_data: {
-            name: serviceName || submission.serviceName,
-            description: `Nanak Accounts - ${serviceName || submission.serviceName}`,
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found',
+      });
+    }
+
+    const stripe = getStripe();
+
+    // Your production domain
+    const BASE_URL = 'https://online.nanakaccountants.com.au';
+
+    const session = await stripe.checkout.sessions.create({
+      customer_email: customerEmail,
+      line_items: [
+        {
+          price_data: {
+            currency: (currency || process.env.CURRENCY || 'aud').toLowerCase(),
+            unit_amount: Math.round(Number(amount) * 100), // Stripe expects cents
+            product_data: {
+              name: serviceName || submission.serviceName,
+              description: `Nanak Accounts - ${serviceName || submission.serviceName}`,
+            },
           },
+          quantity: 1,
         },
-        quantity: 1,
+      ],
+      mode: 'payment',
+      success_url: `${BASE_URL}/payment-success`,
+      cancel_url: `${BASE_URL}/payment-failure`,
+      metadata: {
+        submission_id: String(submission._id),
       },
-    ],
-    mode: 'payment',
-    success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/payment-cancelled?submission_id=${submission._id}`,
-    metadata: { submission_id: String(submission._id) },
-  });
+    });
 
-  submission.stripeCheckoutSessionId = session.id;
-  await submission.save();
+    // Save session ID to submission
+    submission.stripeCheckoutSessionId = session.id;
+    await submission.save();
 
-  res.json({ url: session.url, sessionId: session.id });
+    return res.status(200).json({
+      success: true,
+      url: session.url,
+      sessionId: session.id,
+    });
+  } catch (error) {
+    console.error('Stripe Checkout Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create checkout session',
+    });
+  }
 });
 
 module.exports = {
