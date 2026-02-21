@@ -62,8 +62,8 @@ app.use(
 // Stripe webhooks MUST run before express.json (raw body required)
 app.use('/api', webhookRoutes);
 // JSON parsing (Stripe webhook uses raw body in its router)
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve uploaded files (local storage)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
