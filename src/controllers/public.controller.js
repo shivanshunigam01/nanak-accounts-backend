@@ -298,37 +298,38 @@ const customerName =
     });
   }
 
-  const stripe = getStripe();
-  const origin =
-    process.env.FRONTEND_ORIGIN ||
-    process.env.ADMIN_URL ||
-    'http://localhost:5173';
-    let base = process.env.FRONTEND_ORIGIN || 'http://localhost:5000';
+ const stripe = getStripe();
 
-  const session = await stripe.checkout.sessions.create({
-    customer_email: primaryEmail,
-    line_items: [
-      {
-        price_data: {
-          currency: (process.env.CURRENCY || 'aud').toLowerCase(),
-          unit_amount: Math.round(Number(pricing.total) * 100),
-          product_data: {
-            name: getServiceName(serviceKey),
-            description: `Nanak Accounts - ${getServiceName(serviceKey)}`,
-          },
+// Use fixed production frontend URL
+const BASE_URL = 'https://online.nanakaccountants.com.au';
+
+const session = await stripe.checkout.sessions.create({
+  customer_email: primaryEmail,
+  line_items: [
+    {
+      price_data: {
+        currency: (process.env.CURRENCY || 'aud').toLowerCase(),
+        unit_amount: Math.round(Number(pricing.total) * 100),
+        product_data: {
+          name: getServiceName(serviceKey),
+          description: `Nanak Accounts - ${getServiceName(serviceKey)}`,
         },
-        quantity: 1,
       },
-    ],
-    mode: 'payment',
-    success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/payment-cancelled?submission_id=${submission._id}`,
-    metadata: {
-      submission_id: String(submission._id),
-      service_key: serviceKey,
-      order_number: orderNumber,
+      quantity: 1,
     },
-  });
+  ],
+  mode: 'payment',
+
+  // Updated URLs (as requested)
+  success_url: `${BASE_URL}/payment-success`,
+  cancel_url: `${BASE_URL}/payment-failure`,
+
+  metadata: {
+    submission_id: String(submission._id),
+    service_key: serviceKey,
+    order_number: orderNumber,
+  },
+});
 
   submission.stripeCheckoutSessionId = session.id;
   await submission.save();
