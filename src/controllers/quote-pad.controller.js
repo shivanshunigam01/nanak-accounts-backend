@@ -32,8 +32,13 @@ function mergeDeep(base, saved) {
 function mergedConfig(doc) {
   const defaults = defaultQuotePadConfig();
   if (!doc) return defaults;
+  const firm = mergeDeep(defaults.firm, doc.firm || {});
+  // Promote legacy staff-discount caps (30 / 40) to the new 50% product default.
+  if (firm.maxDiscountPct === 30 || firm.maxDiscountPct === 40) {
+    firm.maxDiscountPct = defaults.firm.maxDiscountPct;
+  }
   return {
-    firm: mergeDeep(defaults.firm, doc.firm || {}),
+    firm,
     household: mergeHouseholdConfig(doc.household || {}),
     business: mergeBusinessConfig(doc.business || {}),
   };

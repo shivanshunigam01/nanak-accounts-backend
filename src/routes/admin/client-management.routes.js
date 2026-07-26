@@ -19,6 +19,8 @@ router.patch('/clients/:id', c.updateClient);
 router.get('/allocation', c.getAllocation);
 router.get('/groups', c.listGroups);
 router.post('/groups', c.createGroup);
+router.post('/groups/link', c.linkGroup);
+router.post('/groups/consolidate', c.consolidateGroup);
 
 router.get('/payments', c.getPayments);
 router.post('/payments/fee-uplift', c.applyFeeUplift);

@@ -47,6 +47,16 @@ exports.createGroup = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, group });
 });
 
+exports.linkGroup = asyncHandler(async (req, res) => {
+  const data = await svc.linkGroup(req.user, req.body);
+  res.json({ success: true, ...data });
+});
+
+exports.consolidateGroup = asyncHandler(async (req, res) => {
+  const data = await svc.consolidateGroup(req.user, req.body);
+  res.json({ success: true, ...data });
+});
+
 exports.getPayments = asyncHandler(async (req, res) => {
   const data = await svc.getPayments(req.user, req.query);
   res.json({ success: true, ...data });

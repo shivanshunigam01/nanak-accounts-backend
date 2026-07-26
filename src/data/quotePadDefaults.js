@@ -25,7 +25,7 @@ function defaultFirm() {
     email: 'info@nanakaccountants.com.au',
     validDays: 14,
     gst: 0.1,
-    maxDiscountPct: 40,
+    maxDiscountPct: 50,
   };
 }
 

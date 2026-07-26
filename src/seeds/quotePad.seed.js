@@ -164,7 +164,10 @@ async function run() {
   const defaults = defaultQuotePadConfig();
   await QuotePadConfig.findOneAndUpdate(
     { key: 'default' },
-    { $setOnInsert: { firm: defaults.firm, household: defaults.household, business: defaults.business } },
+    {
+      $set: { 'firm.maxDiscountPct': defaults.firm.maxDiscountPct },
+      $setOnInsert: { firm: defaults.firm, household: defaults.household, business: defaults.business },
+    },
     { upsert: true }
   );
   console.log('✅ Quote Pad pricing config seeded (defaults, kept if already customised)');

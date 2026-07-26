@@ -20,6 +20,58 @@ const ACTIVE = { status: 'Active' };
 
 const EXIT_REASONS = PracticeClient.EXIT_REASONS || [];
 
+const REL_LABELS = [
+  'Spouse',
+  'Director',
+  'Shareholder',
+  'Trustee',
+  'Beneficiary',
+  'Family trust',
+  'Trading company',
+  'Investment company',
+  'Related entity',
+];
+
+function isPersonStructure(type) {
+  return type === 'Sole Trader' || type === 'Individual';
+}
+
+function typeCountLabel(ms) {
+  const counts = {};
+  for (const m of ms) {
+    const t = m.type || 'Company';
+    counts[t] = (counts[t] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([t, n]) => {
+      const lower = t.toLowerCase();
+      if (n === 1) return `1 ${lower}`;
+      if (t === 'Company') return `${n} companies`;
+      if (t === 'Sole Trader') return `${n} sole traders`;
+      return `${n} ${lower}s`;
+    })
+    .join(' · ');
+}
+
+function suggestGroupName(host) {
+  const entity = String(host.entity || 'Family').trim();
+  const parts = entity.split(/\s+/).filter(Boolean);
+  let base;
+  if (isPersonStructure(host.type) && parts.length) {
+    base = parts[parts.length - 1];
+  } else {
+    base = parts[0] || 'Family';
+  }
+  const titled = base.charAt(0).toUpperCase() + base.slice(1).toLowerCase();
+  return `${titled} Group`;
+}
+
+function normalizeRelLabel(v) {
+  const s = String(v || '').trim();
+  if (REL_LABELS.includes(s)) return s;
+  return s || 'Related entity';
+}
+
 /** Runs the v4 backfill at most once per process; callers never wait on it twice. */
 let migrationPromise = null;
 function ensureV4Migration() {
@@ -643,6 +695,7 @@ async function getMeta(user) {
     isFirm: isFirmRole(user),
     staff: staff.map((s) => ({ _id: s._id, name: s.name, role: s.role })),
     csvHeaders: CLIENT_CSV_HEADERS,
+    relationshipLabels: REL_LABELS,
     today: dstr(todayFromSettings(settings)),
   };
 }
@@ -707,8 +760,8 @@ async function getDashboard(user) {
 
   let directorSplits = 0;
   for (const g of Object.values(groupMap)) {
-    const ents = g.members.filter((m) => m.type !== 'Individual');
-    const inds = g.members.filter((m) => m.type === 'Individual');
+    const ents = g.members.filter((m) => !isPersonStructure(m.type));
+    const inds = g.members.filter((m) => isPersonStructure(m.type));
     for (const e of ents) {
       for (const i of inds) {
         if (e.managerName !== i.managerName) directorSplits++;
@@ -921,10 +974,20 @@ async function getClient(user, id) {
   }
   const { runs } = await loadRuns([c], settings);
   const canEdit = canEditClient(user, c);
+  const memberSerialized = members.map(serializeClient);
+  const managers = [...new Set(memberSerialized.map((m) => m.managerName).filter(Boolean))];
   return {
     client: { ...serializeClient(c), canEdit },
-    group: group ? { id: String(group._id), name: group.name } : null,
-    members: members.map(serializeClient),
+    group: group
+      ? {
+          id: String(group._id),
+          name: group.name,
+          clients: memberSerialized.length,
+          managers,
+          split: managers.length > 1,
+        }
+      : null,
+    members: memberSerialized,
     runs: runs.slice(0, 12),
     meta: {
       currentQuarter: settings.currentQuarter,
@@ -932,6 +995,7 @@ async function getClient(user, id) {
       quarters: settings.quarters,
       annualType: annualType(c),
       exitReasons: EXIT_REASONS,
+      relationshipLabels: REL_LABELS,
       feeOverdue: c.pkg === 'On Package' && monthsSince(c.feeReview) >= settings.feeReviewMonths,
       payrollGap: payrollGap(c),
       payrollUnderBilled: payrollUnderBilled(c, settings.payrollRate),
@@ -1031,11 +1095,13 @@ async function updateClient(user, id, body) {
   const prevGst = !!c.gst;
   const prevPayroll = !!c.payroll;
   const prevType = c.type;
+  const prevPayrollMgr = c.payrollMgr || null;
+  const prevPayrollMgrId = c.payrollMgrId ? String(c.payrollMgrId) : null;
 
   const allowed = [
     'entity', 'abn', 'pkg', 'fee', 'freq', 'gst', 'payroll',
     'email', 'phone', 'annual', 'feeReview', 'payrollBilled', 'payrollActual',
-    'payrollFreq', 'payFirstDate', 'payLag', 'payrollMgr', 'payrollMgrId', 'relLabel', 'isNewClient',
+    'payrollFreq', 'payFirstDate', 'payLag', 'relLabel', 'isNewClient',
   ];
   for (const k of allowed) {
     if (body[k] !== undefined) c[k] = body[k];
@@ -1061,9 +1127,13 @@ async function updateClient(user, id, body) {
   if (body.payroll !== undefined && !!c.payroll !== prevPayroll) {
     if (c.payroll) {
       if (!c.payrollFreq) c.payrollFreq = body.payrollFreq || 'Fortnightly';
-      if (!c.payrollMgr) {
-        c.payrollMgr = body.payrollMgr || c.managerName || null;
-        c.payrollMgrId = body.payrollMgrId || c.payrollMgrId || c.managerId || null;
+      if (body.payrollMgrId || body.payrollMgr) {
+        const payMgr = await resolveManager(body.payrollMgrId, body.payrollMgr);
+        c.payrollMgrId = payMgr.managerId || c.managerId || null;
+        c.payrollMgr = payMgr.managerName || c.managerName || null;
+      } else if (!c.payrollMgr) {
+        c.payrollMgr = c.managerName || null;
+        c.payrollMgrId = c.managerId || null;
       }
       c.activity.push({
         date: today,
@@ -1072,6 +1142,28 @@ async function updateClient(user, id, body) {
       });
     } else {
       c.activity.push({ date: today, who, action: 'Payroll service turned off' });
+    }
+  }
+
+  // Payroll manager assignment (Team members) — editable any time payroll is on
+  if (
+    c.payroll &&
+    (body.payrollMgrId !== undefined || body.payrollMgr !== undefined) &&
+    !(body.payroll !== undefined && !!c.payroll !== prevPayroll)
+  ) {
+    const payMgr = await resolveManager(
+      body.payrollMgrId !== undefined ? body.payrollMgrId : c.payrollMgrId,
+      body.payrollMgr !== undefined ? body.payrollMgr : c.payrollMgr
+    );
+    if (payMgr.managerId) {
+      c.payrollMgrId = payMgr.managerId;
+      c.payrollMgr = payMgr.managerName;
+      if (
+        String(prevPayrollMgrId || '') !== String(payMgr.managerId) ||
+        String(prevPayrollMgr || '') !== String(payMgr.managerName)
+      ) {
+        c.activity.push({ date: today, who, action: `Payroll manager set to ${c.payrollMgr}` });
+      }
     }
   }
 
@@ -1186,24 +1278,52 @@ async function listGroups(user) {
   const settings = await getSettings();
   const groups = await PracticeGroup.find({ active: true }).lean();
   const clients = await PracticeClient.find({ ...ACTIVE, groupId: { $ne: null } }).lean();
+  const directorConflicts = [];
+
   const rows = groups.map((g) => {
     const ms = clients.filter((c) => String(c.groupId) === String(g._id));
     const managers = [...new Set(ms.map((m) => m.managerName).filter(Boolean))];
     const fees = ms.filter((m) => m.pkg === 'On Package').reduce((s, m) => s + (m.fee || 0), 0);
     const basOut = ms.filter((m) => m.gst && m.bas?.[settings.currentQuarter] === 'Not Completed').length;
     const gaps = [];
-    const ents = ms.filter((m) => m.type !== 'Individual');
-    const inds = ms.filter((m) => m.type === 'Individual');
+    const ents = ms.filter((m) => !isPersonStructure(m.type));
+    const inds = ms.filter((m) => isPersonStructure(m.type));
     if (inds.length === 0) gaps.push('No individual returns');
     else if (inds.filter((i) => i.annual !== 'Not Required').length === 0) gaps.push('Individual returns not with us');
     if (ents.filter((e) => e.pkg === 'On Package').length === 0 && ents.length) gaps.push('No entity on a package');
     if (ents.filter((e) => e.payroll).length === 0 && ents.length) gaps.push('No payroll service');
     if (ms.filter((m) => m.type === 'Trust').length === 0) gaps.push('No trust structure');
+
+    for (const e of ents) {
+      for (const i of inds) {
+        if (String(e.managerName || '') !== String(i.managerName || '')) {
+          directorConflicts.push({
+            groupId: String(g._id),
+            groupName: g.name,
+            entity: {
+              id: String(e._id),
+              entity: e.entity,
+              managerName: e.managerName || 'unassigned',
+              managerId: e.managerId ? String(e.managerId) : null,
+            },
+            person: {
+              id: String(i._id),
+              entity: i.entity,
+              managerName: i.managerName || 'unassigned',
+              managerId: i.managerId ? String(i.managerId) : null,
+              relLabel: i.relLabel || null,
+            },
+          });
+        }
+      }
+    }
+
     return {
       id: String(g._id),
       name: g.name,
       clients: ms.length,
       types: [...new Set(ms.map((m) => m.type))],
+      typeLabel: typeCountLabel(ms),
       managers,
       split: managers.length > 1,
       gaps,
@@ -1212,7 +1332,19 @@ async function listGroups(user) {
       members: ms.map(serializeClient),
     };
   });
-  return { rows, currentQuarterLabel: curLabel(settings) };
+
+  const withMembers = rows.filter((r) => r.clients > 0);
+  return {
+    rows: withMembers,
+    directorConflicts,
+    summary: {
+      groupCount: withMembers.length,
+      splitCount: withMembers.filter((r) => r.split).length,
+      conflictCount: directorConflicts.length,
+    },
+    currentQuarter: settings.currentQuarter,
+    currentQuarterLabel: curLabel(settings),
+  };
 }
 
 async function createGroup(user, body) {
@@ -1223,6 +1355,173 @@ async function createGroup(user, body) {
   }
   const g = await PracticeGroup.create({ name: String(body.name || '').trim() });
   return { id: String(g._id), name: g.name };
+}
+
+/** Admin: link related clients into a group (creates group if host has none). */
+async function linkGroup(user, body) {
+  if (user.role !== 'admin') {
+    const err = new Error('Only admin can manage relationships');
+    err.status = 403;
+    throw err;
+  }
+  const hostId = body.hostId;
+  const targetId = body.targetId;
+  if (!hostId || !targetId) {
+    const err = new Error('hostId and targetId are required');
+    err.status = 400;
+    throw err;
+  }
+  if (String(hostId) === String(targetId)) {
+    const err = new Error('Cannot link a client to itself');
+    err.status = 400;
+    throw err;
+  }
+
+  const host = await PracticeClient.findById(hostId);
+  const target = await PracticeClient.findById(targetId);
+  if (!host || !target) {
+    const err = new Error('Client not found');
+    err.status = 404;
+    throw err;
+  }
+  if ((host.status || 'Active') !== 'Active' || (target.status || 'Active') !== 'Active') {
+    const err = new Error('Only active clients can be linked');
+    err.status = 400;
+    throw err;
+  }
+
+  const settings = await getSettings();
+  const today = dstr(todayFromSettings(settings));
+  const who = actorName(user);
+  const relLabel = normalizeRelLabel(body.relLabel);
+  let group;
+
+  if (!host.groupId) {
+    group = await PracticeGroup.create({ name: suggestGroupName(host) });
+    host.groupId = group._id;
+    if (!host.relLabel) {
+      host.relLabel = isPersonStructure(host.type) ? 'Primary contact' : 'Primary entity';
+    }
+  } else {
+    group = await PracticeGroup.findById(host.groupId);
+    if (!group) {
+      group = await PracticeGroup.create({ name: suggestGroupName(host) });
+      host.groupId = group._id;
+    }
+  }
+
+  if (target.groupId && String(target.groupId) !== String(host.groupId)) {
+    const err = new Error(`${target.entity} is already in another group — unlink them first`);
+    err.status = 400;
+    throw err;
+  }
+
+  target.groupId = host.groupId;
+  target.relLabel = relLabel;
+
+  host.activity.push({
+    date: today,
+    who,
+    action: `${target.entity} linked to this group as ${relLabel}`,
+  });
+  target.activity.push({
+    date: today,
+    who,
+    action: `Linked to ${group.name} as ${relLabel}`,
+  });
+
+  await host.save();
+  await target.save();
+
+  const members = await PracticeClient.find({ groupId: host.groupId, ...ACTIVE }).lean();
+  return {
+    group: { id: String(group._id), name: group.name },
+    host: serializeClient(host.toObject ? host.toObject() : host),
+    target: serializeClient(target.toObject ? target.toObject() : target),
+    members: members.map(serializeClient),
+  };
+}
+
+/**
+ * Admin: consolidate related clients under one Team member as client manager.
+ * Body: { entityId, personId } moves person to entity's manager,
+ * or { groupId, managerId } reassigns the whole group.
+ */
+async function consolidateGroup(user, body) {
+  if (user.role !== 'admin') {
+    const err = new Error('Only admin can consolidate group managers');
+    err.status = 403;
+    throw err;
+  }
+
+  const settings = await getSettings();
+  const today = dstr(todayFromSettings(settings));
+  const who = actorName(user);
+  let targets = [];
+  let resolved;
+
+  if (body.groupId && (body.managerId || body.managerName)) {
+    resolved = await resolveManager(body.managerId, body.managerName);
+    if (!resolved.managerId) {
+      const err = new Error('Target manager must be a Team member');
+      err.status = 400;
+      throw err;
+    }
+    targets = await PracticeClient.find({ groupId: body.groupId, ...ACTIVE });
+  } else if (body.entityId && body.personId) {
+    const entity = await PracticeClient.findById(body.entityId);
+    const person = await PracticeClient.findById(body.personId);
+    if (!entity || !person) {
+      const err = new Error('Client not found');
+      err.status = 404;
+      throw err;
+    }
+    resolved = await resolveManager(entity.managerId, entity.managerName);
+    if (!resolved.managerId) {
+      const err = new Error('Entity client manager must be a Team member');
+      err.status = 400;
+      throw err;
+    }
+    targets = [entity, person];
+  } else {
+    const err = new Error('Provide entityId+personId or groupId+managerId');
+    err.status = 400;
+    throw err;
+  }
+
+  for (const c of targets) {
+    const prev = c.managerName || 'unassigned';
+    if (String(c.managerId || '') === String(resolved.managerId)) continue;
+    c.managerId = resolved.managerId;
+    c.managerName = resolved.managerName;
+    c.activity.push({
+      date: today,
+      who,
+      action: `Reallocated from ${prev} to ${resolved.managerName} to consolidate the family group`,
+    });
+    await c.save();
+  }
+
+  const groupId = body.groupId || targets[0]?.groupId;
+  if (groupId) {
+    const fakeUser = { role: 'manager', _id: user._id, name: user.name };
+    const data = await listGroups(fakeUser);
+    const row = (data.rows || []).find((r) => r.id === String(groupId));
+    return {
+      managerName: resolved.managerName,
+      managerId: String(resolved.managerId),
+      updated: targets.length,
+      group: row || null,
+      directorConflicts: data.directorConflicts || [],
+      summary: data.summary,
+    };
+  }
+
+  return {
+    managerName: resolved.managerName,
+    managerId: String(resolved.managerId),
+    updated: targets.length,
+  };
 }
 
 async function getPayments(user, query = {}) {
@@ -1761,6 +2060,8 @@ module.exports = {
   getAllocation,
   listGroups,
   createGroup,
+  linkGroup,
+  consolidateGroup,
   getPayments,
   getPayroll,
   getSuper,
