@@ -97,11 +97,6 @@ exports.getPayroll = asyncHandler(async (req, res) => {
   res.json({ success: true, ...data });
 });
 
-exports.getSuper = asyncHandler(async (req, res) => {
-  const data = await svc.getSuper(req.user, req.query);
-  res.json({ success: true, ...data });
-});
-
 exports.updatePayrollRun = asyncHandler(async (req, res) => {
   const data = await svc.updatePayrollRun(req.user, req.body);
   res.json({ success: true, ...data });
@@ -124,6 +119,31 @@ exports.exportReminders = asyncHandler(async (req, res) => {
 
 exports.startFY = asyncHandler(async (req, res) => {
   const meta = await svc.startFY(req.user, req.body);
+  res.json({ success: true, meta });
+});
+
+exports.getPeriods = asyncHandler(async (req, res) => {
+  const data = await svc.getPeriods(req.user);
+  res.json({ success: true, ...data });
+});
+
+exports.updatePeriod = asyncHandler(async (req, res) => {
+  const data = await svc.updateCmPeriod(req.user, req.params.periodId, req.body);
+  res.json({ success: true, ...data });
+});
+
+exports.lockPeriod = asyncHandler(async (req, res) => {
+  const data = await svc.lockCmPeriod(req.user, req.params.periodId, req.body);
+  res.json({ success: true, ...data });
+});
+
+exports.unlockPeriod = asyncHandler(async (req, res) => {
+  const data = await svc.unlockCmPeriod(req.user, req.params.periodId);
+  res.json({ success: true, ...data });
+});
+
+exports.setWorkingYear = asyncHandler(async (req, res) => {
+  const meta = await svc.setWorkingYear(req.user, req.body);
   res.json({ success: true, meta });
 });
 

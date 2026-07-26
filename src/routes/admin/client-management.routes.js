@@ -31,7 +31,6 @@ router.post('/payments/reconcile-xero', c.reconcileXero);
 
 router.get('/payroll', c.getPayroll);
 router.post('/payroll/run', c.updatePayrollRun);
-router.get('/super', c.getSuper);
 
 router.get('/lodgement', c.getLodgement);
 router.get('/reminders', c.getReminders);
@@ -39,7 +38,12 @@ router.post('/reminders/export', c.exportReminders);
 
 router.patch('/settings', c.updateSettings);
 
+router.get('/periods', c.getPeriods);
+router.patch('/periods/:periodId', c.updatePeriod);
+router.post('/periods/:periodId/lock', c.lockPeriod);
+router.post('/periods/:periodId/unlock', c.unlockPeriod);
 router.post('/fy/start', c.startFY);
+router.post('/fy/working', c.setWorkingYear);
 router.post('/fy/advance-quarter', c.advanceQuarter);
 
 router.post('/seed', c.seed);

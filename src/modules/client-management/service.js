@@ -2,18 +2,32 @@ const PracticeClient = require('../../models/PracticeClient');
 const PracticeGroup = require('../../models/PracticeGroup');
 const PracticeSettings = require('../../models/PracticeSettings');
 const PracticePayrollOverride = require('../../models/PracticePayrollOverride');
+const PracticePeriod = require('../../models/PracticePeriod');
+const ClientPeriodStatus = require('../../models/ClientPeriodStatus');
 const User = require('../../models/User');
-const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO } = require('./dates');
+const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO, parseFlexibleDate } = require('./dates');
 const {
   buildRunsForClients,
   runBucket,
   runWhen,
   stpBreaches,
-  superBucket,
-  filterSuperRuns,
 } = require('./payroll');
 const { addDays, dayDiff, dshort, WD } = require('./dates');
 const { migrateClientManagementV4 } = require('./migrateV4');
+const {
+  periodId,
+  periodDefinitions,
+  ensurePeriodsForYear,
+  ensureClientPeriodStatuses,
+  ensurePeriodMigration,
+  hydrateClientsForWorkingYear,
+  attachLodgementYears,
+  updateClientPeriods,
+  assertPeriodsWritable,
+  listPeriods,
+  lockPeriod,
+  unlockPeriod,
+} = require('./periods');
 
 const QKEYS = ['q1', 'q2', 'q3', 'q4'];
 
@@ -78,10 +92,12 @@ function normalizeRelLabel(v) {
 let migrationPromise = null;
 function ensureV4Migration() {
   if (!migrationPromise) {
-    migrationPromise = migrateClientManagementV4().catch((e) => {
-      migrationPromise = null;
-      throw e;
-    });
+    migrationPromise = migrateClientManagementV4()
+      .then(async () => ensurePeriodMigration(await getSettings()))
+      .catch((e) => {
+        migrationPromise = null;
+        throw e;
+      });
   }
   return migrationPromise;
 }
@@ -108,6 +124,10 @@ const CLIENT_CSV_HEADERS = [
   'fee',
   'gst',
   'payroll',
+  'payCycle',
+  'firstPayDate',
+  'employees',
+  'payrollManager',
   'software',
   'quickbooks',
   'email',
@@ -537,7 +557,8 @@ function curDue(settings) {
 async function scopeClients(user, extra = {}) {
   const filter = { ...ACTIVE, ...extra };
   if (!isFirmRole(user)) Object.assign(filter, staffAllocationFilter(user));
-  return PracticeClient.find(filter).lean();
+  const [settings, clients] = await Promise.all([getSettings(), PracticeClient.find(filter).lean()]);
+  return hydrateClientsForWorkingYear(clients, settings);
 }
 
 const BAS_STATUSES = ['Completed', 'In Progress', 'Not Completed', 'Not Required'];
@@ -602,13 +623,22 @@ async function clientFilterQuery(user, query = {}) {
   }
 
   if (query.q) {
-    and.push({
-      $or: [
-        { entity: new RegExp(query.q, 'i') },
-        { abn: new RegExp(query.q, 'i') },
-        { email: new RegExp(query.q, 'i') },
-      ],
-    });
+    const q = String(query.q).trim();
+    const digits = q.replace(/\D/g, '');
+    const digitOnly = digits.length >= 3 && !/[a-zA-Z]/.test(q);
+    if (digitOnly) {
+      and.push({
+        $or: [
+          { phone: new RegExp(digits.split('').join('\\s*'), 'i') },
+          { abn: new RegExp(digits.split('').join('\\s*'), 'i') },
+        ],
+      });
+    } else {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      and.push({
+        $or: [{ entity: rx }, { abn: rx }, { phone: rx }, { email: rx }],
+      });
+    }
   }
 
   if (and.length === 1) Object.assign(filter, and[0]);
@@ -719,14 +749,19 @@ function serializeClient(c) {
 async function getMeta(user) {
   await ensureV4Migration();
   const settings = await getSettings();
+  const { periods, summary: periodSummary } = await listPeriods(settings);
   // Client managers = Team staff/managers (deduped). Admins are not assignable managers.
   const staff = await listAssignableTeamMembers();
   return {
-    activeFy: settings.activeFy,
+    activeFy: settings.workingFy || settings.activeFy,
+    workingFy: settings.workingFy || settings.activeFy,
     currentQuarter: settings.currentQuarter,
     currentQuarterLabel: curLabel(settings),
     currentDue: curDue(settings),
     quarters: settings.quarters,
+    dueDateDefaults: settings.dueDateDefaults,
+    periods,
+    periodSummary,
     structures: PracticeClient.STRUCTURE_TYPES || [],
     softwareOptions: (PracticeClient.SOFTWARE_OPTIONS || []).filter(Boolean),
     exitReasons: EXIT_REASONS,
@@ -772,7 +807,6 @@ async function getDashboard(user) {
   const attention = clients.filter((c) => (c.gst && c.bas?.[curQ] === 'Not Completed') || hasWarn(c));
   const odRuns = runs.filter((r) => runBucket(r, today) === 'overdue');
   const stpB = stpBreaches(runs);
-  const superPastDeadline = runs.filter((r) => r.superOverdue).length;
   const inactiveClients = await PracticeClient.countDocuments(
     isFirmRole(user) ? { status: 'Inactive' } : { status: 'Inactive', ...staffAllocationFilter(user) }
   );
@@ -852,13 +886,11 @@ async function getDashboard(user) {
       subtitle: `firm-wide view · ${clients.length} active clients`,
       urgent: [
         odRuns.length ? `${odRuns.length} pay runs overdue` : null,
-        superPastDeadline ? `${superPastDeadline} super payments past deadline` : null,
         basDue ? `${basDue} BAS outstanding` : null,
         exVal ? `$${exVal.toLocaleString()} billed work unpaid` : null,
       ].filter(Boolean),
       tiles: {
         payRunsOverdue: odRuns.length,
-        superPastDeadline,
         basOutstanding: basDue,
         workUnpaid: exVal,
         underBilled: pgapVal,
@@ -870,7 +902,6 @@ async function getDashboard(user) {
       kpis: {
         activeClients: clients.length,
         inactiveClients,
-        superPastDeadline,
         newThisMonth: newCount,
         packageRevenue: mrr,
         onPackageCount: onPkg.length,
@@ -923,22 +954,26 @@ async function getDashboard(user) {
     subtitle: `${clients.length} active clients`,
     urgent: [
       dueList.length ? `${dueList.length} BAS to start` : null,
-      superPastDeadline ? `${superPastDeadline} super payments past deadline` : null,
       myExVal ? `$${myExVal.toLocaleString()} unpaid on work you finished` : null,
+      odRuns.length ? `${odRuns.length} pay runs overdue` : null,
     ].filter(Boolean),
     tiles: {
       basNotStarted: dueList.length,
       basInProgress: progList.length,
-      superPastDeadline,
       workUnpaid: myExVal,
       underBilled: pgapVal,
       newClients: newCount,
+      payRunsOverdue: odRuns.length,
+      payingTodayTomorrow: runs.filter((r) => {
+        const when = runWhen(r, today);
+        return when === 'today' || when === 'tomorrow';
+      }).length,
+      stpNotLodged: stpB.length,
     },
     kpis: {
       myClients: clients.length,
       activeClients: clients.length,
       inactiveClients,
-      superPastDeadline,
       newAllocations: newCount,
       basDonePct: pct,
       basDone: done,
@@ -956,10 +991,60 @@ async function getDashboard(user) {
       basStatus: c.bas?.[curQ],
       hasWarn: hasWarn(c),
     })),
+    payrollQueue: odRuns
+      .concat(runs.filter((r) => {
+        const when = runWhen(r, today);
+        return when === 'today' || when === 'tomorrow';
+      }))
+      .slice(0, 12)
+      .map((r) => ({
+        clientId: r.clientId,
+        entity: r.entity,
+        payDate: r.payDate,
+        payWd: r.payWd,
+        periodStr: r.periodStr,
+        status: r.status,
+        stp: r.stp,
+        employees: r.employees,
+        canEdit: r.canEdit,
+        when: runWhen(r, today),
+      })),
     exposure: myEx.slice(0, 20),
     currentQuarter: curQ,
     currentQuarterLabel: curQL,
   };
+}
+
+/** Rank type-ahead matches: name-start → word-start → anywhere → phone/ABN. Lower is better. */
+function rankClientSearch(c, qRaw) {
+  const q = String(qRaw || '').trim().toLowerCase();
+  if (!q) return { score: 999, field: null };
+  const digits = q.replace(/\D/g, '');
+  const digitOnly = digits.length >= 3 && !/[a-z]/.test(q);
+  const entity = String(c.entity || '').toLowerCase();
+  const phoneDigits = String(c.phone || '').replace(/\D/g, '');
+  const abnDigits = String(c.abn || '').replace(/\D/g, '');
+
+  if (digitOnly) {
+    if (phoneDigits.includes(digits)) return { score: 40, field: 'phone' };
+    if (abnDigits.includes(digits)) return { score: 41, field: 'abn' };
+    return { score: 900, field: null };
+  }
+
+  if (entity.startsWith(q)) return { score: 10, field: 'entity' };
+  const words = entity.split(/[\s\-_/]+/).filter(Boolean);
+  if (words.some((w) => w.startsWith(q))) return { score: 20, field: 'entity' };
+  if (entity.includes(q)) return { score: 30, field: 'entity' };
+  if (digits.length >= 3) {
+    if (phoneDigits.includes(digits)) return { score: 40, field: 'phone' };
+    if (abnDigits.includes(digits)) return { score: 41, field: 'abn' };
+  }
+  if (String(c.email || '')
+    .toLowerCase()
+    .includes(q)) {
+    return { score: 50, field: 'email' };
+  }
+  return { score: 900, field: null };
 }
 
 async function listClients(user, query = {}) {
@@ -973,15 +1058,25 @@ async function listClients(user, query = {}) {
   const page = Math.max(1, Number(query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
   let list = await PracticeClient.find(filter).sort({ entity: 1 }).lean();
+  await hydrateClientsForWorkingYear(list, settings);
   if (bas) {
     const curQ = settings.currentQuarter;
     list = list.filter((c) => c.bas?.[curQ] === bas);
+  }
+  const q = query.q ? String(query.q).trim() : '';
+  if (q) {
+    list = list
+      .map((c) => ({ c, rank: rankClientSearch(c, q) }))
+      .filter((x) => x.rank.score < 900)
+      .sort((a, b) => a.rank.score - b.rank.score || String(a.c.entity).localeCompare(String(b.c.entity)))
+      .map((x) => x.c);
   }
   const total = list.length;
   const items = list.slice((page - 1) * limit, page * limit).map((c) => ({
     ...serializeClient(c),
     canEdit: canEditClient(user, c),
     isMine: canEditClient(user, c) && user.role !== 'admin',
+    searchMatch: q ? rankClientSearch(c, q) : undefined,
   }));
   const [activeCount, inactiveCount] = await Promise.all([
     PracticeClient.countDocuments({ status: 'Active' }),
@@ -1009,11 +1104,14 @@ async function getClient(user, id) {
   }
   // All roles can view any client (including Inactive); editing is gated by canEdit.
   const settings = await getSettings();
+  await hydrateClientsForWorkingYear([c], settings);
+  await attachLodgementYears(c, settings);
   let group = null;
   let members = [];
   if (c.groupId) {
     group = await PracticeGroup.findById(c.groupId).lean();
     members = await PracticeClient.find({ groupId: c.groupId, ...ACTIVE }).lean();
+    await hydrateClientsForWorkingYear(members, settings);
   }
   const { runs } = await loadRuns([c], settings);
   const canEdit = canEditClient(user, c);
@@ -1034,9 +1132,11 @@ async function getClient(user, id) {
     members: memberSerialized,
     runs: runs.slice(0, 12).map((run) => ({ ...run, canEdit: canEditPayroll })),
     meta: {
+      workingFy: settings.workingFy || settings.activeFy,
       currentQuarter: settings.currentQuarter,
       currentQuarterLabel: curLabel(settings),
       quarters: settings.quarters,
+      periods: (await listPeriods(settings)).periods,
       annualType: annualType(c),
       exitReasons: EXIT_REASONS,
       relationshipLabels: REL_LABELS,
@@ -1075,6 +1175,28 @@ async function createClient(user, body) {
   const type = normalizeStructure(body.type);
   const bas = basForGst(null, gst, curQ);
   const payroll = !!body.payroll;
+  const payFirstDate = payroll
+    ? parseFlexibleDate(body.payFirstDate || body.firstPayDate) || null
+    : null;
+  const payrollFreq = payroll
+    ? String(body.payrollFreq || body.payCycle || 'Fortnightly').trim() || 'Fortnightly'
+    : null;
+  const employees = payroll
+    ? Number(body.payrollBilled ?? body.employees) || 0
+    : 0;
+  let payrollMgrId = payroll ? body.payrollMgrId || null : null;
+  let payrollMgr = payroll ? body.payrollMgr || null : null;
+  if (payroll && (body.payrollManager || body.payrollMgrName) && !payrollMgrId) {
+    const payResolved = await resolveManager(null, body.payrollManager || body.payrollMgrName);
+    if (payResolved.managerId) {
+      payrollMgrId = payResolved.managerId;
+      payrollMgr = payResolved.managerName;
+    }
+  }
+  if (payroll && !payrollMgrId) {
+    payrollMgrId = managerId;
+    payrollMgr = managerName;
+  }
   const doc = await PracticeClient.create({
     entity: String(body.entity || '').trim().toUpperCase(),
     abn: body.abn || '',
@@ -1093,17 +1215,17 @@ async function createClient(user, body) {
     phone: body.phone || '',
     managerId,
     managerName,
-    payrollMgrId: payroll ? body.payrollMgrId || managerId : null,
-    payrollMgr: payroll ? body.payrollMgr || managerName : null,
+    payrollMgrId,
+    payrollMgr,
     groupId: body.groupId || null,
     bas,
     annual: 'Not Started',
     payq: { q1: 'Not Paid', q2: 'Not Paid', q3: 'Not Paid', q4: 'Not Paid' },
     feeReview: today,
-    payrollBilled: payroll ? Number(body.payrollBilled) || 0 : 0,
-    payrollActual: payroll ? Number(body.payrollActual) || Number(body.payrollBilled) || 0 : 0,
-    payrollFreq: payroll ? body.payrollFreq || 'Fortnightly' : null,
-    payFirstDate: payroll ? body.payFirstDate || null : null,
+    payrollBilled: employees,
+    payrollActual: payroll ? Number(body.payrollActual) || employees : 0,
+    payrollFreq,
+    payFirstDate,
     payLag: body.payLag ?? 3,
     isNewClient: true,
     notes: body.note
@@ -1117,6 +1239,7 @@ async function createClient(user, body) {
       },
     ],
   });
+  await ensureClientPeriodStatuses(doc.toObject(), settings.workingFy || settings.activeFy);
   return serializeClient(doc.toObject());
 }
 
@@ -1136,6 +1259,16 @@ async function updateClient(user, id, body) {
   const curQ = settings.currentQuarter;
   const today = dstr(todayFromSettings(settings));
   const who = actorName(user);
+  await ensureClientPeriodStatuses(c.toObject(), settings.workingFy || settings.activeFy);
+  const workingFy = settings.workingFy || settings.activeFy;
+  const touchedPeriodIds = [];
+  for (const qk of QKEYS) {
+    if (body.bas?.[qk] !== undefined || body.payq?.[qk] !== undefined || body.inv?.[qk] !== undefined) {
+      touchedPeriodIds.push(periodId(workingFy, 'bas', qk));
+    }
+  }
+  if (body.annual !== undefined) touchedPeriodIds.push(periodId(workingFy, 'annual'));
+  await assertPeriodsWritable(touchedPeriodIds);
 
   const prevGst = !!c.gst;
   const prevPayroll = !!c.payroll;
@@ -1146,11 +1279,14 @@ async function updateClient(user, id, body) {
 
   const allowed = [
     'entity', 'abn', 'pkg', 'fee', 'freq', 'gst', 'payroll',
-    'email', 'phone', 'annual', 'feeReview', 'payrollBilled', 'payrollActual',
+    'email', 'phone', 'feeReview', 'payrollBilled', 'payrollActual',
     'payrollFreq', 'payFirstDate', 'payLag', 'relLabel', 'isNewClient',
   ];
   for (const k of allowed) {
     if (body[k] !== undefined) c[k] = body[k];
+  }
+  if (body.payFirstDate !== undefined) {
+    c.payFirstDate = body.payFirstDate ? parseFlexibleDate(body.payFirstDate) || null : null;
   }
   if (body.type !== undefined) c.type = normalizeStructure(body.type);
   if (body.software !== undefined) c.software = normalizeSoftware(body.software);
@@ -1195,7 +1331,8 @@ async function updateClient(user, id, body) {
   if (
     c.payroll &&
     (body.payrollMgrId !== undefined || body.payrollMgr !== undefined) &&
-    !(body.payroll !== undefined && !!c.payroll !== prevPayroll)
+    !(body.payroll !== undefined && !!c.payroll !== prevPayroll) &&
+    !(typeof body.activitySummary === 'string' && body.activitySummary.trim())
   ) {
     const payMgr = await resolveManager(
       body.payrollMgrId !== undefined ? body.payrollMgrId : c.payrollMgrId,
@@ -1210,6 +1347,19 @@ async function updateClient(user, id, body) {
       ) {
         c.activity.push({ date: today, who, action: `Payroll manager set to ${c.payrollMgr}` });
       }
+    }
+  } else if (
+    c.payroll &&
+    (body.payrollMgrId !== undefined || body.payrollMgr !== undefined) &&
+    !(body.payroll !== undefined && !!c.payroll !== prevPayroll)
+  ) {
+    const payMgr = await resolveManager(
+      body.payrollMgrId !== undefined ? body.payrollMgrId : c.payrollMgrId,
+      body.payrollMgr !== undefined ? body.payrollMgr : c.payrollMgr
+    );
+    if (payMgr.managerId) {
+      c.payrollMgrId = payMgr.managerId;
+      c.payrollMgr = payMgr.managerName;
     }
   }
 
@@ -1295,6 +1445,14 @@ async function updateClient(user, id, body) {
   if (body.groupId !== undefined && user.role === 'admin') {
     c.groupId = body.groupId || null;
   }
+  if (typeof body.activitySummary === 'string' && body.activitySummary.trim()) {
+    c.activity.push({
+      date: today,
+      who,
+      action: body.activitySummary.trim(),
+    });
+  }
+  await updateClientPeriods({ client: c, settings, body, today });
   await c.save();
   return { ...serializeClient(c.toObject()), canEdit: true };
 }
@@ -1308,6 +1466,7 @@ async function getAllocation(user) {
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
   const clients = await PracticeClient.find(ACTIVE).lean();
+  await hydrateClientsForWorkingYear(clients, settings);
   const by = {};
   for (const c of clients) {
     const key = c.managerName || 'Unassigned';
@@ -1331,6 +1490,7 @@ async function listGroups(user) {
   const settings = await getSettings();
   const groups = await PracticeGroup.find({ active: true }).lean();
   const clients = await PracticeClient.find({ ...ACTIVE, groupId: { $ne: null } }).lean();
+  await hydrateClientsForWorkingYear(clients, settings);
   const directorConflicts = [];
 
   const rows = groups.map((g) => {
@@ -1893,6 +2053,19 @@ async function updateCmSettings(user, body) {
   if (body.onTimeThreshold !== undefined && user.role === 'admin') {
     settings.onTimeThreshold = Number(body.onTimeThreshold) || settings.onTimeThreshold;
   }
+  if (body.dueDateDefaults !== undefined && user.role === 'admin') {
+    const incoming = body.dueDateDefaults || {};
+    const next = { ...(settings.dueDateDefaults?.toObject?.() || settings.dueDateDefaults || {}) };
+    for (const key of ['q1', 'q2', 'q3', 'q4', 'annual']) {
+      if (incoming[key]) {
+        next[key] = {
+          day: Number(incoming[key].day) || next[key]?.day,
+          month: Number(incoming[key].month) || next[key]?.month,
+        };
+      }
+    }
+    settings.dueDateDefaults = next;
+  }
   await settings.save();
   return getMeta(user);
 }
@@ -2022,44 +2195,6 @@ async function getPayroll(user, query = {}) {
   };
 }
 
-/** Payday Super view: one row per pay run with its super deadline (pay date + 7 days). */
-async function getSuper(user, query = {}) {
-  const { runs, today } = await loadPayrollRuns(user);
-  const f = query.filter || 'action';
-  const items = filterSuperRuns(runs, f);
-  const unpaid = runs.filter((r) => r.super !== 'Paid');
-  const overdue = runs.filter((r) => r.superOverdue);
-  const dueToday = unpaid.filter((r) => r.superWhen === 'today');
-  const dueWeek = unpaid.filter((r) => r.superWhen === 'week');
-  const paid = runs.filter((r) => r.super === 'Paid');
-  return {
-    isFirm: isFirmRole(user),
-    today: dstr(today),
-    filter: f,
-    counts: {
-      action: overdue.length + dueToday.length + dueWeek.length,
-      overdue: overdue.length,
-      today: dueToday.length,
-      week: dueWeek.length,
-      paid: paid.length,
-      all: runs.length,
-    },
-    kpis: {
-      totalRuns: runs.length,
-      superPaid: paid.length,
-      superUnpaid: unpaid.length,
-      pastDeadline: overdue.length,
-      dueToday: dueToday.length,
-      dueThisWeek: dueWeek.length,
-      clientsAtRisk: new Set(overdue.map((r) => r.clientId)).size,
-      onTimePct: runs.length
-        ? Math.round(((runs.length - overdue.length) / runs.length) * 1000) / 10
-        : 100,
-    },
-    items: items.slice(0, 80).map((r) => ({ ...r, bucket: superBucket(r) })),
-  };
-}
-
 async function updatePayrollRun(user, body) {
   const { clientId, payDate, status, stp } = body;
   const c = await PracticeClient.findById(clientId);
@@ -2077,13 +2212,9 @@ async function updatePayrollRun(user, body) {
   const settings = await getSettings();
   const today = dstr(todayFromSettings(settings));
   const existing = await PracticePayrollOverride.findOne({ clientId, payDate }).lean();
-  const superOnly = body.super !== undefined && status === undefined && stp === undefined;
-  const superStatus =
-    body.super === 'Paid' ? 'Paid' : body.super === 'Not Paid' ? 'Not Paid' : existing?.super || 'Not Paid';
   const update = {
-    status: status !== undefined ? status : existing?.status || (superOnly ? 'Not Started' : 'Completed'),
-    stp: stp !== undefined ? stp : existing?.stp || (superOnly ? 'Not Lodged' : 'Lodged'),
-    super: superStatus,
+    status: status !== undefined ? status : existing?.status || 'Completed',
+    stp: stp !== undefined ? stp : existing?.stp || 'Lodged',
     employees:
       body.employees !== undefined
         ? Number(body.employees)
@@ -2099,9 +2230,7 @@ async function updatePayrollRun(user, body) {
   c.activity.push({
     date: today,
     who: actorName(user),
-    action: superOnly
-      ? `Super for pay run ${payDate} marked ${update.super}`
-      : `Payroll run ${payDate} marked ${update.status} / STP ${update.stp} / Super ${update.super}`,
+    action: `Payroll run ${payDate} marked ${update.status} / STP ${update.stp}`,
   });
   await c.save();
   return { ok: true };
@@ -2116,6 +2245,7 @@ async function getLodgement(user) {
   const settings = await getSettings();
   const threshold = settings.onTimeThreshold;
   const clients = await PracticeClient.find(ACTIVE).lean();
+  await hydrateClientsForWorkingYear(clients, settings);
   const ls = lodgementStats(clients, settings);
 
   const managerNames = [...new Set(clients.map((c) => c.managerName || 'Unassigned'))];
@@ -2223,56 +2353,13 @@ async function startFY(user, body) {
   }
   const settings = await getSettings();
   const nextFy = body.fy || (() => {
-    const [a, b] = settings.activeFy.split('-').map((x) => Number(x.length === 2 ? `20${x}` : x) || Number(x));
+    const [a] = String(settings.workingFy || settings.activeFy).split('-').map((x) => Number(x.length === 2 ? `20${x}` : x) || Number(x));
     const start = a < 100 ? 2000 + a : a;
     return `${String(start + 1).slice(-2)}-${String(start + 2).slice(-2)}`;
   })();
-  const today = dstr(todayFromSettings(settings));
-  const clients = await PracticeClient.find(ACTIVE);
-  for (const c of clients) {
-    c.history.push({
-      fy: settings.activeFy,
-      annual: c.annual,
-      q: (settings.quarters || []).map((q) => ({
-        l: q.l,
-        s: c.bas?.[q.k],
-        p: c.payq?.[q.k],
-        i: c.inv?.[q.k] || null,
-      })),
-    });
-    c.bas = {
-      q1: c.gst ? 'Not Completed' : 'Not Required',
-      q2: 'Not Required',
-      q3: 'Not Required',
-      q4: 'Not Required',
-    };
-    c.payq = { q1: 'Not Paid', q2: 'Not Paid', q3: 'Not Paid', q4: 'Not Paid' };
-    c.inv = {};
-    c.recon = {};
-    c.annual = 'Not Started';
-    c.activity.push({
-      date: today,
-      who: 'System',
-      action: `Financial year ${nextFy} opened by admin`,
-    });
-    c.markModified('bas');
-    c.markModified('payq');
-    c.markModified('inv');
-    c.markModified('recon');
-    await c.save();
-  }
-  settings.activeFy = nextFy;
-  settings.currentQuarter = 'q1';
-  // roll quarter labels roughly
-  const y = Number(String(nextFy).split('-')[0]);
-  const yy = y < 100 ? 2000 + y : y;
-  settings.quarters = [
-    { k: 'q1', l: `Sep ${String(yy).slice(-2)}`, due: `28 Oct ${yy}` },
-    { k: 'q2', l: `Dec ${String(yy).slice(-2)}`, due: `28 Feb ${yy + 1}` },
-    { k: 'q3', l: `Mar ${String(yy + 1).slice(-2)}`, due: `28 Apr ${yy + 1}` },
-    { k: 'q4', l: `Jun ${String(yy + 1).slice(-2)}`, due: `28 Jul ${yy + 1}` },
-  ];
-  await settings.save();
+  const clients = await PracticeClient.find({}).lean();
+  await ensurePeriodsForYear(nextFy, settings);
+  await ensureClientPeriodStatuses(clients, nextFy, settings);
   return getMeta(user);
 }
 
@@ -2284,13 +2371,74 @@ async function advanceQuarter(user, body) {
   }
   const settings = await getSettings();
   const qKey = body.quarter || settings.currentQuarter;
-  await PracticeClient.updateMany(
-    { ...ACTIVE, gst: true, [`bas.${qKey}`]: 'Not Required' },
-    { $set: { [`bas.${qKey}`]: 'Not Completed' } }
-  );
-  settings.currentQuarter = qKey;
+  settings.currentQuarter = QKEYS.includes(qKey) ? qKey : settings.currentQuarter;
   await settings.save();
   return getMeta(user);
+}
+
+async function setWorkingYear(user, body) {
+  if (!isFirmRole(user)) {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    throw err;
+  }
+  const settings = await getSettings();
+  const fy = String(body.fy || '').trim();
+  if (!(await PracticePeriod.exists({ financialYear: fy }))) {
+    const err = new Error('Open this financial year before setting it as the working year');
+    err.status = 400;
+    throw err;
+  }
+  settings.workingFy = fy;
+  settings.activeFy = fy;
+  settings.quarters = periodDefinitions(fy, settings)
+    .filter((period) => period.kind === 'bas')
+    .map((period) => ({ k: period.quarter, l: period.label, due: period.dueDate }));
+  if (body.quarter && QKEYS.includes(body.quarter)) settings.currentQuarter = body.quarter;
+  await settings.save();
+  return getMeta(user);
+}
+
+async function getPeriods(user) {
+  if (!isFirmRole(user)) {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    throw err;
+  }
+  const settings = await getSettings();
+  return listPeriods(settings);
+}
+
+async function lockCmPeriod(user, id, body) {
+  const settings = await getSettings();
+  return lockPeriod(user, id, body.confirm === true, dstr(todayFromSettings(settings)));
+}
+
+async function unlockCmPeriod(user, id) {
+  const settings = await getSettings();
+  return unlockPeriod(user, id, dstr(todayFromSettings(settings)));
+}
+
+async function updateCmPeriod(user, id, body) {
+  if (user.role !== 'admin') {
+    const err = new Error('Admin only');
+    err.status = 403;
+    throw err;
+  }
+  const period = await PracticePeriod.findOne({ periodId: id });
+  if (!period) {
+    const err = new Error('Lodgement period not found');
+    err.status = 404;
+    throw err;
+  }
+  if (period.locked) {
+    const err = new Error('Unlock the period before changing its due date');
+    err.status = 403;
+    throw err;
+  }
+  if (body.dueDate !== undefined) period.dueDate = String(body.dueDate || '').trim();
+  await period.save();
+  return { period: period.toObject() };
 }
 
 async function importClients(user, body) {
@@ -2350,6 +2498,10 @@ async function exportClients(user) {
         c.fee || '',
         c.gst,
         c.payroll,
+        c.payrollFreq || '',
+        c.payFirstDate ? String(c.payFirstDate).slice(0, 10) : '',
+        c.payrollBilled || '',
+        c.payrollMgr || '',
         c.software || '',
         c.qb,
         c.email,
@@ -2400,6 +2552,8 @@ async function reconcileXero(user, body) {
   }
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
+  const currentPeriodId = periodId(settings.workingFy || settings.activeFy, 'bas', curQ);
+  await assertPeriodsWritable([currentPeriodId]);
   const today = dstr(todayFromSettings(settings));
 
   // Prefer applying a reviewed preview payload (clientId + amount + result).
@@ -2451,6 +2605,23 @@ async function reconcileXero(user, body) {
         invoice ? ` against invoice ${invoice}` : ''
       }`,
     });
+    await ensureClientPeriodStatuses(c.toObject(), settings.workingFy || settings.activeFy);
+    await ClientPeriodStatus.updateOne(
+      { clientId: c._id, periodId: currentPeriodId },
+      {
+        $set: {
+          feeStatus: result,
+          invoiceNumber: invoice || null,
+          reconciliation: {
+            date: today,
+            by: actorName(user),
+            amount,
+            invoice: invoice || null,
+            src: 'Xero',
+          },
+        },
+      }
+    );
     await c.save();
     n++;
   }
@@ -2471,12 +2642,16 @@ module.exports = {
   consolidateGroup,
   getPayments,
   getPayroll,
-  getSuper,
   updatePayrollRun,
   getLodgement,
   getReminders,
   exportReminders,
+  getPeriods,
+  updateCmPeriod,
+  lockCmPeriod,
+  unlockCmPeriod,
   startFY,
+  setWorkingYear,
   advanceQuarter,
   importClients,
   exportClients,

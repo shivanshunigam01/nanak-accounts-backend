@@ -3,6 +3,24 @@ const PracticeClient = require('../models/PracticeClient');
 const PracticeGroup = require('../models/PracticeGroup');
 const PracticeSettings = require('../models/PracticeSettings');
 const PracticePayrollOverride = require('../models/PracticePayrollOverride');
+const PracticePeriod = require('../models/PracticePeriod');
+const ClientPeriodStatus = require('../models/ClientPeriodStatus');
+const { ensurePeriodMigration } = require('../modules/client-management/periods');
+
+const STATUTORY_QUARTERS = [
+  { k: 'q1', l: 'Sep 25', due: '28 Nov 2025' },
+  { k: 'q2', l: 'Dec 25', due: '28 Feb 2026' },
+  { k: 'q3', l: 'Mar 26', due: '26 May 2026' },
+  { k: 'q4', l: 'Jun 26', due: '28 Aug 2026' },
+];
+
+const STATUTORY_DUE_DEFAULTS = PracticeSettings.DEFAULT_DUE_DATE_DEFAULTS || {
+  q1: { day: 28, month: 11 },
+  q2: { day: 28, month: 2 },
+  q3: { day: 26, month: 5 },
+  q4: { day: 28, month: 8 },
+  annual: { day: 15, month: 5 },
+};
 
 const STAFF_NAMES = [
   'Yatin',
@@ -157,7 +175,7 @@ function buildClientDoc(row, staffMap, extras = {}) {
     if (bas[i] === 'Completed') {
       const ot = Math.random() < 0.89;
       onTime[k] = ot;
-      lodged[k] = `${ot ? 'On or before' : 'After'} ${['28 Oct 2025', '28 Feb 2026', '28 Apr 2026', '28 Jul 2026'][i]}`;
+      lodged[k] = `${ot ? 'On or before' : 'After'} ${['28 Nov 2025', '28 Feb 2026', '26 May 2026', '28 Aug 2026'][i]}`;
     }
   });
   return {
@@ -209,6 +227,8 @@ async function seedClientManagement({ force = false } = {}) {
     await PracticeClient.deleteMany({});
     await PracticeGroup.deleteMany({});
     await PracticePayrollOverride.deleteMany({});
+    await PracticePeriod.deleteMany({});
+    await ClientPeriodStatus.deleteMany({});
   }
 
   await PracticeSettings.findOneAndUpdate(
@@ -216,9 +236,12 @@ async function seedClientManagement({ force = false } = {}) {
     {
       $set: {
         activeFy: '2025-26',
+        workingFy: '2025-26',
         currentQuarter: 'q4',
         offices: OFFICES,
         todayOverride: '23 Jul 2026',
+        quarters: STATUTORY_QUARTERS,
+        dueDateDefaults: STATUTORY_DUE_DEFAULTS,
       },
     },
     { upsert: true }
@@ -421,7 +444,7 @@ async function seedClientManagement({ force = false } = {}) {
     );
   }
 
-  // Seed a few overdue unpaid super overrides (pay date ~14+ days before todayOverride 23 Jul 2026)
+  // Seed a few completed pay-run overrides (pay date before todayOverride 23 Jul 2026)
   const payrollClients = await PracticeClient.find({
     status: 'Active',
     payroll: true,
@@ -436,24 +459,29 @@ async function seedClientManagement({ force = false } = {}) {
         $set: {
           status: 'Completed',
           stp: 'Lodged',
-          super: 'Not Paid',
           employees: pc.payrollActual || pc.payrollBilled || 1,
           by: pc.payrollMgr || 'System',
           on: '08 Jul 2026',
         },
+        $unset: { super: 1 },
       },
       { upsert: true }
     );
   }
 
+  const settings = await PracticeSettings.findOne({ singleton: 'default' });
+  if (settings) await ensurePeriodMigration(settings);
+
   return { seeded: true, count: docs.length, groups: 2, staff: STAFF_NAMES.length };
 }
 
 async function clearClientManagement() {
-  const [clients, groups, overrides] = await Promise.all([
+  const [clients, groups, overrides, periods, statuses] = await Promise.all([
     PracticeClient.deleteMany({}),
     PracticeGroup.deleteMany({}),
     PracticePayrollOverride.deleteMany({}),
+    PracticePeriod.deleteMany({}),
+    ClientPeriodStatus.deleteMany({}),
   ]);
   // Reset FY settings to defaults (keep singleton doc)
   await PracticeSettings.findOneAndUpdate(
@@ -461,15 +489,12 @@ async function clearClientManagement() {
     {
       $set: {
         activeFy: '2025-26',
+        workingFy: '2025-26',
         currentQuarter: 'q4',
         todayOverride: null,
         offices: OFFICES,
-        quarters: [
-          { k: 'q1', l: 'Sep 25', due: '28 Oct 2025' },
-          { k: 'q2', l: 'Dec 25', due: '28 Feb 2026' },
-          { k: 'q3', l: 'Mar 26', due: '28 Apr 2026' },
-          { k: 'q4', l: 'Jun 26', due: '28 Jul 2026' },
-        ],
+        quarters: STATUTORY_QUARTERS,
+        dueDateDefaults: STATUTORY_DUE_DEFAULTS,
       },
     },
     { upsert: true }
@@ -479,6 +504,8 @@ async function clearClientManagement() {
     clientsDeleted: clients.deletedCount || 0,
     groupsDeleted: groups.deletedCount || 0,
     payrollOverridesDeleted: overrides.deletedCount || 0,
+    periodsDeleted: periods.deletedCount || 0,
+    statusesDeleted: statuses.deletedCount || 0,
   };
 }
 

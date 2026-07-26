@@ -17,6 +17,24 @@ function parseISO(v) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
+/** Accept YYYY-MM-DD or DD/MM/YYYY (and D/M/YYYY). Returns ISO date string or null. */
+function parseFlexibleDate(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const iso = parseISO(s);
+  if (iso) return toISO(iso);
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const dt = new Date(year, month - 1, day);
+  if (Number.isNaN(dt.getTime()) || dt.getDate() !== day || dt.getMonth() !== month - 1) return null;
+  return toISO(dt);
+}
+
 function addDays(dt, n) {
   const x = new Date(dt.getTime());
   x.setDate(x.getDate() + n);
@@ -90,6 +108,7 @@ module.exports = {
   pad2,
   toISO,
   parseISO,
+  parseFlexibleDate,
   addDays,
   dayDiff,
   dstr,

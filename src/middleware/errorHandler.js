@@ -17,7 +17,9 @@ function errorHandler(err, req, res, _next) {
     return res.status(400).json({ success: false, message: 'Duplicate key error', details: err.keyValue });
   }
 
-  res.status(status).json({ success: false, message });
+  const payload = { success: false, message };
+  if (err.details !== undefined) payload.details = err.details;
+  res.status(status).json(payload);
 }
 
 module.exports = { errorHandler };
