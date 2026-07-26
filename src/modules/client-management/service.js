@@ -974,6 +974,7 @@ async function getClient(user, id) {
   }
   const { runs } = await loadRuns([c], settings);
   const canEdit = canEditClient(user, c);
+  const canEditPayroll = canManagePayrollClient(user, c);
   const memberSerialized = members.map(serializeClient);
   const managers = [...new Set(memberSerialized.map((m) => m.managerName).filter(Boolean))];
   return {
@@ -988,7 +989,7 @@ async function getClient(user, id) {
         }
       : null,
     members: memberSerialized,
-    runs: runs.slice(0, 12),
+    runs: runs.slice(0, 12).map((run) => ({ ...run, canEdit: canEditPayroll })),
     meta: {
       currentQuarter: settings.currentQuarter,
       currentQuarterLabel: curLabel(settings),
@@ -1001,13 +1002,14 @@ async function getClient(user, id) {
       payrollUnderBilled: payrollUnderBilled(c, settings.payrollRate),
       owing: payOwing(c, settings.currentQuarter),
       canEdit,
+      canEditPayroll,
     },
   };
 }
 
 async function createClient(user, body) {
-  if (user.role !== 'admin') {
-    const err = new Error('Only admin can add clients and assign them to staff/managers');
+  if (!isFirmRole(user)) {
+    const err = new Error('Only admin/owner can add clients and assign them to staff/managers');
     err.status = 403;
     throw err;
   }
@@ -1579,24 +1581,28 @@ async function getPayments(user, query = {}) {
 }
 
 /** Pay runs are only generated for Active clients that actually have payroll switched on. */
+function canManagePayrollClient(user, client) {
+  if (isFirmRole(user)) return true;
+  if (client.payrollMgrId && String(client.payrollMgrId) === String(user._id)) return true;
+  return Boolean(
+    client.payrollMgr &&
+      user.name &&
+      nameMatchRegex(user.name).test(String(client.payrollMgr).trim())
+  );
+}
+
 async function loadPayrollRuns(user) {
   const settings = await getSettings();
-  const clients = await scopeClients(user, { payroll: true });
+  // Payroll is firm-visible. Ordinary staff can inspect every client's runs,
+  // while mutation permissions are calculated per run below.
+  const clients = await PracticeClient.find({ ...ACTIVE, payroll: true }).lean();
   const { runs, today } = await loadRuns(clients, settings);
-  let list = runs;
-  if (!isFirmRole(user)) {
-    list = runs.filter(
-      (r) =>
-        r.payrollMgr === user.name ||
-        clients.some(
-          (c) =>
-            String(c._id) === r.clientId &&
-            (String(c.managerId) === String(user._id) ||
-              (c.managerName && nameMatchRegex(user.name).test(String(c.managerName).trim())))
-        )
-    );
-  }
-  return { settings, clients, runs: list, today };
+  const clientById = new Map(clients.map((c) => [String(c._id), c]));
+  const visibleRuns = runs.map((run) => ({
+    ...run,
+    canEdit: canManagePayrollClient(user, clientById.get(String(run.clientId)) || {}),
+  }));
+  return { settings, clients, runs: visibleRuns, today };
 }
 
 async function getPayroll(user, query = {}) {
@@ -1673,11 +1679,7 @@ async function updatePayrollRun(user, body) {
     err.status = 404;
     throw err;
   }
-  const can =
-    isFirmRole(user) ||
-    c.payrollMgr === user.name ||
-    String(c.payrollMgrId) === String(user._id) ||
-    String(c.managerId) === String(user._id);
+  const can = canManagePayrollClient(user, c);
   if (!can) {
     const err = new Error('Forbidden');
     err.status = 403;
@@ -1900,8 +1902,8 @@ async function advanceQuarter(user, body) {
 }
 
 async function importClients(user, body) {
-  if (user.role !== 'admin') {
-    const err = new Error('Only admin can import clients');
+  if (!isFirmRole(user)) {
+    const err = new Error('Only admin/owner can import clients');
     err.status = 403;
     throw err;
   }
