@@ -971,7 +971,7 @@ async function listClients(user, query = {}) {
   const { lifecycle, bas } = splitStatusQuery(query);
   const filter = await clientFilterQuery(user, query);
   const page = Math.max(1, Number(query.page) || 1);
-  const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
+  const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
   let list = await PracticeClient.find(filter).sort({ entity: 1 }).lean();
   if (bas) {
     const curQ = settings.currentQuarter;
