@@ -31,6 +31,7 @@ router.post('/payments/reconcile-xero', c.reconcileXero);
 
 router.get('/payroll', c.getPayroll);
 router.post('/payroll/run', c.updatePayrollRun);
+router.get('/super', c.getSuper);
 
 router.get('/lodgement', c.getLodgement);
 router.get('/reminders', c.getReminders);

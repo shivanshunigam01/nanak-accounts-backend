@@ -11,12 +11,38 @@ const {
   stepDays,
 } = require('./dates');
 
+function enrichRunSuper(run, prior, todayD) {
+  const superStatus = prior?.super || run.super || 'Not Paid';
+  const superDueDate = toISO(addDays(run.pay, 7));
+  const superDue = addDays(run.pay, 7);
+  const superDd = dayDiff(superDue, todayD);
+  const overdue = superStatus === 'Not Paid' && superDd < 0;
+  return {
+    ...run,
+    super: superStatus,
+    superDueDate,
+    superDueStr: dstr(superDue),
+    superOverdue: overdue,
+    superWhen:
+      superStatus === 'Paid'
+        ? 'paid'
+        : overdue
+          ? 'overdue'
+          : superDd === 0
+            ? 'today'
+            : superDd > 0 && superDd <= 7
+              ? 'week'
+              : 'later',
+  };
+}
+
 function buildRunsForClients(clients, today, overridesByKey = {}) {
   const runs = [];
   let seq = 0;
   const todayD = today instanceof Date ? today : new Date(today);
 
   for (const c of clients) {
+    // Payday Super / payroll only for Active clients with payroll enabled
     if (c.status === 'Inactive') continue;
     if (!c.payroll || !c.payrollFreq) continue;
     const first = parseISO(c.payFirstDate);
@@ -61,9 +87,11 @@ function buildRunsForClients(clients, today, overridesByKey = {}) {
           payWd: dwd(pay),
           status: prior.status,
           stp: prior.stp,
+          super: prior.super || 'Not Paid',
           employees: prior.employees,
           by: prior.by,
           on: prior.on,
+          amount: (c.payrollActual || c.payrollBilled || 0) * 25,
         };
       } else {
         const past = pay < todayD;
@@ -76,7 +104,12 @@ function buildRunsForClients(clients, today, overridesByKey = {}) {
         if (past) {
           const lateOne = (idNum + pay.getDate()) % 11 === 0;
           status = lateOne ? 'Not Started' : 'Completed';
-          stp = status === 'Completed' ? ((idNum + pay.getDate()) % 13 === 0 ? 'Not Lodged' : 'Lodged') : 'Not Lodged';
+          stp =
+            status === 'Completed'
+              ? (idNum + pay.getDate()) % 13 === 0
+                ? 'Not Lodged'
+                : 'Lodged'
+              : 'Not Lodged';
           if (status === 'Completed') {
             emp = c.payrollActual || c.payrollBilled;
             by = c.payrollMgr;
@@ -104,38 +137,18 @@ function buildRunsForClients(clients, today, overridesByKey = {}) {
           payWd: dwd(pay),
           status,
           stp,
+          super: 'Not Paid',
           employees: emp,
           by,
           on,
+          amount: (c.payrollActual || c.payrollBilled || 0) * 25,
         };
       }
-      runs.push(base);
+      runs.push(enrichRunSuper(base, prior, todayD));
     }
   }
   runs.sort((a, b) => a.pay - b.pay);
   return runs;
-}
-
-function previewPayDays(payFirstDate, payrollFreq, count = 4) {
-  const first = parseISO(payFirstDate);
-  if (!first || !payrollFreq) return [];
-  const days = [];
-  let pay = new Date(first.getTime());
-  for (let i = 0; i < count; i++) {
-    if (i > 0) pay = nextPay(pay, payrollFreq);
-    const lag = 0;
-    const step = stepDays(payrollFreq);
-    const pEnd = addDays(pay, -lag);
-    const pStart =
-      payrollFreq === 'Monthly' ? addDays(prevPay(addDays(pEnd, 1), payrollFreq), 0) : addDays(pEnd, -(step - 1));
-    days.push({
-      payDate: toISO(pay),
-      payStr: dstr(pay),
-      payWd: dwd(pay),
-      periodStr: `${dshort(pStart)} - ${dshort(pEnd)}`,
-    });
-  }
-  return days;
 }
 
 function runWhen(r, todayD) {
@@ -160,10 +173,34 @@ function stpBreaches(list) {
   return list.filter((r) => r.status === 'Completed' && r.stp === 'Not Lodged');
 }
 
+function superBucket(r) {
+  if (r.super === 'Paid') return 'paid';
+  if (r.superOverdue) return 'overdue';
+  if (r.superWhen === 'today') return 'today';
+  if (r.superWhen === 'week') return 'week';
+  return 'later';
+}
+
+function filterSuperRuns(runs, filter) {
+  const f = filter || 'action';
+  if (f === 'all') return runs;
+  if (f === 'paid') return runs.filter((r) => r.super === 'Paid');
+  if (f === 'overdue') return runs.filter((r) => r.superOverdue);
+  if (f === 'today') return runs.filter((r) => r.superWhen === 'today' && r.super === 'Not Paid');
+  if (f === 'week')
+    return runs.filter((r) => (r.superWhen === 'week' || r.superWhen === 'today') && r.super === 'Not Paid');
+  // needs action: unpaid, due within 7 days or overdue
+  return runs.filter(
+    (r) => r.super === 'Not Paid' && (r.superOverdue || r.superWhen === 'today' || r.superWhen === 'week')
+  );
+}
+
 module.exports = {
   buildRunsForClients,
-  previewPayDays,
   runWhen,
   runBucket,
   stpBreaches,
+  enrichRunSuper,
+  superBucket,
+  filterSuperRuns,
 };

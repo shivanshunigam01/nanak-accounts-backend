@@ -11,6 +11,8 @@ const {
   runBucket,
   runWhen,
   stpBreaches,
+  filterSuperRuns,
+  superBucket,
 } = require('./payroll');
 const { addDays, dayDiff, dshort, WD } = require('./dates');
 const { migrateClientManagementV4 } = require('./migrateV4');
@@ -2123,6 +2125,8 @@ async function getPayroll(user, query = {}) {
   const later = enriched.filter((r) => r.when === 'later');
   const flags = enriched.filter((r) => r.billingFlag);
   const stpB = stpBreaches(enriched);
+  const superAction = filterSuperRuns(enriched, 'action');
+  const superOd = enriched.filter((r) => r.superOverdue);
   const seen = {};
   let flagVal = 0;
   for (const r of flags) {
@@ -2141,6 +2145,7 @@ async function getPayroll(user, query = {}) {
     tomorrow: tm,
     week: wk,
     stp: stpB,
+    super: superAction,
     flags,
     later,
     upcoming: later,
@@ -2178,6 +2183,7 @@ async function getPayroll(user, query = {}) {
       upcoming: later.length,
       done: enriched.filter((r) => r.when === 'done').length,
       stp: stpB.length,
+      super: superAction.length,
       flags: flags.length,
       all: enriched.length,
     },
@@ -2187,11 +2193,51 @@ async function getPayroll(user, query = {}) {
       today: td.length,
       tomorrow: tm.length,
       stp: stpB.length,
+      super: superOd.length,
+      superDueSoon: superAction.length,
       billingFlagsMonthly: flagVal,
       billingFlagClients: Object.keys(seen).length,
     },
     weekStrip,
     items: filtered.slice(0, 80),
+  };
+}
+
+/** Payday Super view: one row per pay run with its super deadline (pay date + 7 days). */
+async function getSuper(user, query = {}) {
+  const { runs, today } = await loadPayrollRuns(user);
+  const f = query.filter || 'action';
+  const items = filterSuperRuns(runs, f);
+  const unpaid = runs.filter((r) => r.super !== 'Paid');
+  const overdue = runs.filter((r) => r.superOverdue);
+  const dueToday = unpaid.filter((r) => r.superWhen === 'today');
+  const dueWeek = unpaid.filter((r) => r.superWhen === 'week');
+  const paid = runs.filter((r) => r.super === 'Paid');
+  return {
+    isFirm: isFirmRole(user),
+    today: dstr(today),
+    filter: f,
+    counts: {
+      action: overdue.length + dueToday.length + dueWeek.length,
+      overdue: overdue.length,
+      today: dueToday.length,
+      week: dueWeek.length,
+      paid: paid.length,
+      all: runs.length,
+    },
+    kpis: {
+      totalRuns: runs.length,
+      superPaid: paid.length,
+      superUnpaid: unpaid.length,
+      pastDeadline: overdue.length,
+      dueToday: dueToday.length,
+      dueThisWeek: dueWeek.length,
+      clientsAtRisk: new Set(overdue.map((r) => r.clientId)).size,
+      onTimePct: runs.length
+        ? Math.round(((runs.length - overdue.length) / runs.length) * 1000) / 10
+        : 100,
+    },
+    items: items.slice(0, 80).map((r) => ({ ...r, bucket: superBucket(r) })),
   };
 }
 
@@ -2212,9 +2258,13 @@ async function updatePayrollRun(user, body) {
   const settings = await getSettings();
   const today = dstr(todayFromSettings(settings));
   const existing = await PracticePayrollOverride.findOne({ clientId, payDate }).lean();
+  const superOnly = body.super !== undefined && status === undefined && stp === undefined;
+  const superStatus =
+    body.super === 'Paid' ? 'Paid' : body.super === 'Not Paid' ? 'Not Paid' : existing?.super || 'Not Paid';
   const update = {
-    status: status !== undefined ? status : existing?.status || 'Completed',
-    stp: stp !== undefined ? stp : existing?.stp || 'Lodged',
+    status: status !== undefined ? status : existing?.status || (superOnly ? 'Not Started' : 'Completed'),
+    stp: stp !== undefined ? stp : existing?.stp || (superOnly ? 'Not Lodged' : 'Lodged'),
+    super: superStatus,
     employees:
       body.employees !== undefined
         ? Number(body.employees)
@@ -2230,7 +2280,9 @@ async function updatePayrollRun(user, body) {
   c.activity.push({
     date: today,
     who: actorName(user),
-    action: `Payroll run ${payDate} marked ${update.status} / STP ${update.stp}`,
+    action: superOnly
+      ? `Super for pay run ${payDate} marked ${update.super}`
+      : `Payroll run ${payDate} marked ${update.status} / STP ${update.stp} / Super ${update.super}`,
   });
   await c.save();
   return { ok: true };
@@ -2642,6 +2694,7 @@ module.exports = {
   consolidateGroup,
   getPayments,
   getPayroll,
+  getSuper,
   updatePayrollRun,
   getLodgement,
   getReminders,

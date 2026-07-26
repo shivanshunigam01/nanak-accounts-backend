@@ -97,6 +97,11 @@ exports.getPayroll = asyncHandler(async (req, res) => {
   res.json({ success: true, ...data });
 });
 
+exports.getSuper = asyncHandler(async (req, res) => {
+  const data = await svc.getSuper(req.user, req.query);
+  res.json({ success: true, ...data });
+});
+
 exports.updatePayrollRun = asyncHandler(async (req, res) => {
   const data = await svc.updatePayrollRun(req.user, req.body);
   res.json({ success: true, ...data });
