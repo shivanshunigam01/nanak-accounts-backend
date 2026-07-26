@@ -7,10 +7,12 @@ const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO } = require('./
 const {
   buildRunsForClients,
   runBucket,
+  runWhen,
   stpBreaches,
   superBucket,
   filterSuperRuns,
 } = require('./payroll');
+const { addDays, dayDiff, dshort, WD } = require('./dates');
 const { migrateClientManagementV4 } = require('./migrateV4');
 
 const QKEYS = ['q1', 'q2', 'q3', 'q4'];
@@ -324,11 +326,52 @@ function payTrack(c) {
   return c.pkg === 'On Package' && c.fee;
 }
 
+function monthlyFee(c) {
+  if (!c.fee) return 0;
+  if (c.freq === 'Monthly') return c.fee || 0;
+  if (c.freq === 'Quarterly') return Math.round((c.fee || 0) / 3);
+  if (c.freq === 'Annually') return Math.round((c.fee || 0) / 12);
+  return c.fee || 0;
+}
+
 function payExpected(c) {
   if (!payTrack(c)) return 0;
   if (c.freq === 'Monthly') return Math.round((c.fee || 0) * 3);
   if (c.freq === 'Annually') return Math.round((c.fee || 0) / 4);
   return c.fee || 0;
+}
+
+function normHeader(h) {
+  return String(h || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function parseXeroCsvText(text) {
+  const lines = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .filter((l) => l.trim());
+  if (!lines.length) return [];
+  return lines.map((line) => {
+    const cells = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else inQ = !inQ;
+      } else if (ch === ',' && !inQ) {
+        cells.push(cur);
+        cur = '';
+      } else cur += ch;
+    }
+    cells.push(cur);
+    return cells;
+  });
 }
 
 function payStatus(c, qKey) {
@@ -1097,6 +1140,7 @@ async function updateClient(user, id, body) {
   const prevGst = !!c.gst;
   const prevPayroll = !!c.payroll;
   const prevType = c.type;
+  const prevFeeReview = c.feeReview || null;
   const prevPayrollMgr = c.payrollMgr || null;
   const prevPayrollMgrId = c.payrollMgrId ? String(c.payrollMgrId) : null;
 
@@ -1232,6 +1276,13 @@ async function updateClient(user, id, body) {
         c.activity.push({ date: today, who, action: `Payment ${qk} set to ${body.payq[qk]}${invRef}` });
       }
     }
+  }
+  if (body.feeReview !== undefined && String(body.feeReview) !== String(prevFeeReview || '')) {
+    c.activity.push({
+      date: today,
+      who,
+      action: `Package fee marked reviewed (${body.feeReview})`,
+    });
   }
   if (body.note) {
     c.notes.push({
@@ -1529,55 +1580,321 @@ async function consolidateGroup(user, body) {
 async function getPayments(user, query = {}) {
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
-  let clients = await scopeClients(user, { pkg: 'On Package' });
+  const ci = qIndex(curQ);
+  const allScoped = await scopeClients(user);
+  const book = allScoped.filter(payTrack);
   const f = query.filter || 'all';
-  clients = clients.filter((c) => {
+
+  let expected = 0;
+  let collected = 0;
+  let dueNow = 0;
+  let overdueTotal = 0;
+  const overdueIds = new Set();
+  for (const c of book) {
+    const exp = payExpected(c);
+    expected += exp;
+    const st = payStatus(c, curQ);
+    if (st === 'Paid') collected += exp;
+    else if (st === 'Part Paid') {
+      collected += Math.round(exp / 2);
+      dueNow += Math.round(exp / 2);
+    } else if (st === 'Not Paid' || st === 'Due') {
+      dueNow += exp;
+    }
+    for (let i = 0; i < ci; i++) {
+      const pst = c.payq?.[QKEYS[i]];
+      if (pst !== 'Paid') {
+        overdueIds.add(String(c._id));
+        overdueTotal += pst === 'Part Paid' ? Math.round(exp / 2) : exp;
+      }
+    }
+  }
+
+  let clients = book.filter((c) => {
     if (f === 'unpaid') return payStatus(c, curQ) !== 'Paid';
     if (f === 'due') return payStatus(c, curQ) === 'Due' || payStatus(c, curQ) === 'Not Paid';
-    if (f === 'overdue') {
-      const st = payStatus(c, curQ);
-      return st === 'Not Paid' || st === 'Part Paid';
-    }
+    if (f === 'overdue') return overdueIds.has(String(c._id));
     if (f === 'unreconciled') return !c.recon?.[curQ];
     return true;
   });
-  let collected = 0;
-  let expected = 0;
-  for (const c of clients) {
-    expected += payExpected(c);
-    const st = payStatus(c, curQ);
-    if (st === 'Paid') collected += payExpected(c);
-    else if (st === 'Part Paid') collected += Math.round(payExpected(c) / 2);
-  }
-  const feeStale = (await scopeClients(user)).filter(
-    (c) => c.pkg === 'On Package' && c.fee && monthsSince(c.feeReview) >= settings.feeReviewMonths
-  );
+
+  const feeStale = allScoped
+    .filter((c) => c.pkg === 'On Package' && c.fee && monthsSince(c.feeReview) >= settings.feeReviewMonths)
+    .sort((a, b) => monthsSince(b.feeReview) - monthsSince(a.feeReview));
+
+  const packageMonthly = book.reduce((t, c) => t + monthlyFee(c), 0);
+  const staleMonthly = feeStale.reduce((t, c) => t + monthlyFee(c), 0);
+
+  const gaps = allScoped
+    .filter((c) => payrollGap(c) > 0)
+    .sort((a, b) => payrollGap(b) - payrollGap(a));
+  const gapsMonthly = gaps.reduce((t, c) => t + payrollUnderBilled(c, settings.payrollRate), 0);
+
   return {
     isFirm: isFirmRole(user),
     currentQuarter: curQ,
     currentQuarterLabel: curLabel(settings),
     quarters: settings.quarters,
     filter: f,
+    feeReviewMonths: settings.feeReviewMonths,
+    payrollRate: settings.payrollRate,
     kpis: {
       collected,
       expected,
       outstanding: expected - collected,
-      unreconciled: clients.filter((c) => !c.recon?.[curQ]).length,
+      dueNow,
+      overdueTotal,
+      overdueClients: overdueIds.size,
+      unreconciled: book.filter((c) => !c.recon?.[curQ]).length,
       staleFees: feeStale.length,
-      staleFeeTotal: feeStale.reduce((s, c) => s + (c.fee || 0), 0),
+      staleFeeTotal: staleMonthly,
+      packageMonthly,
+      packageCount: book.length,
     },
     items: clients.slice(0, 80).map((c) => ({
       ...serializeClient(c),
       owing: payOwing(c, curQ),
       expectedQ: payExpected(c),
       payStatuses: Object.fromEntries(QKEYS.map((k) => [k, payStatus(c, k)])),
+      payRaw: Object.fromEntries(QKEYS.map((k) => [k, c.payq?.[k] || 'Not Paid'])),
+      invoices: Object.fromEntries(QKEYS.map((k) => [k, (c.inv && c.inv[k]) || null])),
       invoice: (c.inv && c.inv[curQ]) || null,
       lastRecon: c.recon?.[curQ] || null,
       feeOverdue: monthsSince(c.feeReview) >= settings.feeReviewMonths,
+      monthsSinceReview: monthsSince(c.feeReview),
+      monthlyFee: monthlyFee(c),
     })),
+    modeller: {
+      packageCount: book.length,
+      currentMonthly: packageMonthly,
+      staleCount: feeStale.length,
+      staleMonthly,
+      stale: feeStale.slice(0, 40).map((c) => ({
+        ...serializeClient(c),
+        monthlyFee: monthlyFee(c),
+        monthsSinceReview: monthsSince(c.feeReview),
+      })),
+    },
+    billingGaps: {
+      monthly: gapsMonthly,
+      annual: gapsMonthly * 12,
+      count: gaps.length,
+      rate: settings.payrollRate,
+      items: gaps.slice(0, 40).map((c) => ({
+        ...serializeClient(c),
+        gap: payrollGap(c),
+        underBilled: payrollUnderBilled(c, settings.payrollRate),
+      })),
+    },
     stale: feeStale.slice(0, 40).map(serializeClient),
-    exposure: exposure(await scopeClients(user), curQ).slice(0, 40),
+    exposure: exposure(allScoped, curQ).slice(0, 40),
   };
+}
+
+function matchXeroRows(book, rows) {
+  if (!rows.length) return { items: [], matched: 0, unmatched: 0 };
+  const first = rows[0] || [];
+  const looksLikeHeader = first.some((c) => /contact|abn|amount|customer|name|entity/i.test(String(c || '')));
+  const dataRows = looksLikeHeader ? rows.slice(1) : rows;
+  const H = (looksLikeHeader ? first : ['Contact', 'ABN', 'Amount']).map(normHeader);
+  const col = (names) => {
+    for (let i = 0; i < H.length; i++) {
+      if (names.includes(H[i])) return i;
+    }
+    return -1;
+  };
+  const iName = col(['contact', 'customer', 'contactname', 'client', 'entityname', 'name', 'entity']);
+  const iAbn = col(['abn']);
+  const iAmt = col(['amount', 'amountpaid', 'total', 'paid', 'payment']);
+  const iInv = col(['invoice', 'invoicenumber', 'invoiceno', 'reference', 'ref']);
+
+  const byAbn = {};
+  const byName = {};
+  for (const c of book) {
+    if (c.abn) byAbn[String(c.abn).replace(/\s/g, '')] = c;
+    byName[String(c.entity || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')] = c;
+  }
+
+  const acc = {};
+  for (const row of dataRows) {
+    if (!row) continue;
+    const cells = Array.isArray(row)
+      ? row
+      : [row.contact || row.entity || '', row.abn || '', row.amount, row.invoice || row.invoiceNo || ''];
+    const nm = iName > -1 ? String(cells[iName] || '').trim() : String(row.contact || row.entity || '').trim();
+    const ab = iAbn > -1
+      ? String(cells[iAbn] || '').replace(/\s/g, '')
+      : String(row.abn || '').replace(/\s/g, '');
+    const amtRaw = iAmt > -1 ? cells[iAmt] : row.amount;
+    const amt = Number(String(amtRaw ?? '').replace(/[^0-9.\-]/g, '')) || 0;
+    const invoice = normalizeInvoice(
+      iInv > -1 ? cells[iInv] : row.invoice || row.invoiceNo || row.invoiceNumber || ''
+    );
+    if (!nm && !ab) continue;
+    const c = (ab && byAbn[ab]) || byName[nm.toUpperCase().replace(/[^A-Z0-9]/g, '')] || null;
+    const key = c ? `c${c._id}` : `u:${nm || ab}`;
+    if (!acc[key]) acc[key] = { client: c, name: nm || ab, amount: 0, rows: 0, invoice: '' };
+    acc[key].amount += amt;
+    acc[key].rows++;
+    if (invoice) acc[key].invoice = invoice;
+  }
+
+  const items = [];
+  let matched = 0;
+  let unmatched = 0;
+  for (const a of Object.values(acc)) {
+    if (a.client) {
+      const exp = payExpected(a.client);
+      a.expected = exp;
+      a.result = a.amount >= exp * 0.99 ? 'Paid' : a.amount > 0 ? 'Part Paid' : 'Not Paid';
+      a.clientId = String(a.client._id);
+      a.entity = a.client.entity;
+      matched++;
+    } else {
+      a.result = 'No matching client';
+      a.expected = null;
+      a.clientId = null;
+      a.entity = a.name;
+      unmatched++;
+    }
+    items.push({
+      clientId: a.clientId,
+      entity: a.entity,
+      name: a.name,
+      amount: a.amount,
+      expected: a.expected,
+      result: a.result,
+      invoice: a.invoice || null,
+      rows: a.rows,
+      matched: !!a.client,
+    });
+  }
+  items.sort((x, y) => Number(y.matched) - Number(x.matched));
+  return { items, matched, unmatched };
+}
+
+async function previewXero(user, body) {
+  if (!isFirmRole(user)) {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    throw err;
+  }
+  const settings = await getSettings();
+  const book = (await scopeClients(user)).filter(payTrack);
+  let rows = body.rows || [];
+  if (body.csvText) rows = parseXeroCsvText(body.csvText);
+  const preview = matchXeroRows(book, rows);
+  return {
+    ...preview,
+    currentQuarter: settings.currentQuarter,
+    currentQuarterLabel: curLabel(settings),
+  };
+}
+
+async function exportPaymentsCsv(user) {
+  if (!isFirmRole(user)) {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    throw err;
+  }
+  const settings = await getSettings();
+  const curQ = settings.currentQuarter;
+  const book = (await scopeClients(user)).filter(payTrack);
+  const head = [
+    'Entity Name',
+    'ABN',
+    'Client Manager',
+    'Fee',
+    'Frequency',
+    'Expected per quarter',
+    ...settings.quarters.map((q) => `Fee ${q.l}`),
+    ...settings.quarters.map((q) => `Invoice ${q.l}`),
+    'Owing',
+    'Last reconciled',
+  ];
+  const lines = [head.join(',')];
+  for (const c of book) {
+    const lr = c.recon?.[curQ];
+    lines.push(
+      [
+        c.entity,
+        c.abn,
+        c.managerName || '',
+        c.fee || '',
+        c.freq || '',
+        payExpected(c),
+        ...QKEYS.map((k) => c.payq?.[k] || ''),
+        ...QKEYS.map((k) => (c.inv && c.inv[k]) || ''),
+        payOwing(c, curQ),
+        lr ? `${lr.src || 'Xero'} ${lr.date || ''}` : 'Never',
+      ]
+        .map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+  }
+  return {
+    csv: lines.join('\n'),
+    filename: `nanak-payment-status-${curLabel(settings).replace(/\s/g, '')}.csv`,
+    count: book.length,
+  };
+}
+
+async function exportBillingGapsCsv(user) {
+  if (!isFirmRole(user)) {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    throw err;
+  }
+  const settings = await getSettings();
+  const gaps = (await scopeClients(user))
+    .filter((c) => payrollGap(c) > 0)
+    .sort((a, b) => payrollGap(b) - payrollGap(a));
+  const head = ['Entity Name', 'Manager', 'Billed for', 'Actually processing', 'Gap', 'Under-billed / mo'];
+  const lines = [head.join(',')];
+  for (const c of gaps) {
+    lines.push(
+      [
+        c.entity,
+        c.managerName || '',
+        c.payrollBilled || 0,
+        c.payrollActual || 0,
+        payrollGap(c),
+        payrollUnderBilled(c, settings.payrollRate),
+      ]
+        .map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+  }
+  return {
+    csv: lines.join('\n'),
+    filename: 'nanak-payroll-billing-gaps.csv',
+    count: gaps.length,
+  };
+}
+
+async function updateCmSettings(user, body) {
+  if (!isFirmRole(user)) {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    throw err;
+  }
+  const settings = await getSettings();
+  if (body.reminderTemplate !== undefined) {
+    settings.reminderTemplate = String(body.reminderTemplate || '').trim() || settings.reminderTemplate;
+  }
+  if (body.feeReviewMonths !== undefined && user.role === 'admin') {
+    settings.feeReviewMonths = Number(body.feeReviewMonths) || settings.feeReviewMonths;
+  }
+  if (body.payrollRate !== undefined && user.role === 'admin') {
+    settings.payrollRate = Number(body.payrollRate) || settings.payrollRate;
+  }
+  if (body.onTimeThreshold !== undefined && user.role === 'admin') {
+    settings.onTimeThreshold = Number(body.onTimeThreshold) || settings.onTimeThreshold;
+  }
+  await settings.save();
+  return getMeta(user);
 }
 
 /** Pay runs are only generated for Active clients that actually have payroll switched on. */
@@ -1606,29 +1923,101 @@ async function loadPayrollRuns(user) {
 }
 
 async function getPayroll(user, query = {}) {
-  const { runs: list, today } = await loadPayrollRuns(user);
-  const f = query.filter || 'action';
-  const filtered = list.filter((r) => {
-    const b = runBucket(r, today);
-    if (f === 'action') return b === 'overdue' || b === 'week';
-    if (f === 'overdue') return b === 'overdue';
-    if (f === 'week') return b === 'week';
-    if (f === 'upcoming') return b === 'upcoming';
-    if (f === 'done') return b === 'done';
-    if (f === 'stp') return r.status === 'Completed' && r.stp === 'Not Lodged';
-    return true;
+  const { runs: list, today, clients, settings } = await loadPayrollRuns(user);
+  const todayD = today instanceof Date ? today : new Date(today);
+  const clientById = new Map(clients.map((c) => [String(c._id), c]));
+  const enriched = list.map((r) => {
+    const c = clientById.get(String(r.clientId)) || {};
+    const wn = runWhen(r, todayD);
+    const billed = c.payrollBilled || 0;
+    const processed = r.employees;
+    const over =
+      processed !== null && processed !== undefined && Number(processed) > Number(billed);
+    return {
+      ...r,
+      when: wn,
+      payrollBilled: billed,
+      payrollActual: c.payrollActual || 0,
+      billingFlag: over,
+      billingGap: over ? Number(processed) - Number(billed) : 0,
+    };
   });
+
+  const od = enriched.filter((r) => r.when === 'overdue');
+  const td = enriched.filter((r) => r.when === 'today');
+  const tm = enriched.filter((r) => r.when === 'tomorrow');
+  const wk = enriched.filter((r) => r.when === 'week' || r.when === 'today' || r.when === 'tomorrow');
+  const later = enriched.filter((r) => r.when === 'later');
+  const flags = enriched.filter((r) => r.billingFlag);
+  const stpB = stpBreaches(enriched);
+  const seen = {};
+  let flagVal = 0;
+  for (const r of flags) {
+    const cid = String(r.clientId);
+    if (!seen[cid]) {
+      seen[cid] = 1;
+      flagVal += (r.billingGap || 0) * (settings.payrollRate || 25);
+    }
+  }
+
+  const f = query.filter || 'action';
+  const sets = {
+    action: [...od, ...td, ...tm, ...enriched.filter((r) => r.when === 'week')],
+    overdue: od,
+    today: td,
+    tomorrow: tm,
+    week: wk,
+    stp: stpB,
+    flags,
+    later,
+    upcoming: later,
+    done: enriched.filter((r) => r.when === 'done'),
+    all: enriched,
+  };
+  const filtered = sets[f] || sets.action;
+
+  const weekStrip = [];
+  for (let i = 0; i < 8; i++) {
+    const day = addDays(todayD, i);
+    const onDay = enriched.filter(
+      (r) => r.status !== 'Completed' && dayDiff(r.pay, day) === 0
+    );
+    weekStrip.push({
+      offset: i,
+      label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : WD[day.getDay()],
+      date: dshort(day),
+      count: onDay.length,
+      filter: i === 0 ? 'today' : i === 1 ? 'tomorrow' : 'week',
+    });
+  }
+
   return {
     isFirm: isFirmRole(user),
-    today: dstr(today),
+    today: dstr(todayD),
     filter: f,
+    payrollRate: settings.payrollRate,
     counts: {
-      overdue: list.filter((r) => runBucket(r, today) === 'overdue').length,
-      week: list.filter((r) => runBucket(r, today) === 'week').length,
-      upcoming: list.filter((r) => runBucket(r, today) === 'upcoming').length,
-      done: list.filter((r) => runBucket(r, today) === 'done').length,
-      stp: stpBreaches(list).length,
+      action: od.length + td.length + tm.length + enriched.filter((r) => r.when === 'week').length,
+      overdue: od.length,
+      today: td.length,
+      tomorrow: tm.length,
+      week: wk.length,
+      upcoming: later.length,
+      done: enriched.filter((r) => r.when === 'done').length,
+      stp: stpB.length,
+      flags: flags.length,
+      all: enriched.length,
     },
+    kpis: {
+      overdue: od.length,
+      todayTomorrow: td.length + tm.length,
+      today: td.length,
+      tomorrow: tm.length,
+      stp: stpB.length,
+      billingFlagsMonthly: flagVal,
+      billingFlagClients: Object.keys(seen).length,
+    },
+    weekStrip,
     items: filtered.slice(0, 80),
   };
 }
@@ -1695,7 +2084,10 @@ async function updatePayrollRun(user, body) {
     status: status !== undefined ? status : existing?.status || (superOnly ? 'Not Started' : 'Completed'),
     stp: stp !== undefined ? stp : existing?.stp || (superOnly ? 'Not Lodged' : 'Lodged'),
     super: superStatus,
-    employees: existing?.employees ?? (c.payrollActual || c.payrollBilled),
+    employees:
+      body.employees !== undefined
+        ? Number(body.employees)
+        : existing?.employees ?? (c.payrollActual || c.payrollBilled),
     by: actorName(user),
     on: today,
   };
@@ -2009,21 +2401,28 @@ async function reconcileXero(user, body) {
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
   const today = dstr(todayFromSettings(settings));
-  const rows = body.rows || [];
+
+  // Prefer applying a reviewed preview payload (clientId + amount + result).
+  let applyItems = Array.isArray(body.items) ? body.items.filter((i) => i && i.clientId) : null;
+  if (!applyItems) {
+    const book = (await scopeClients(user)).filter(payTrack);
+    let rows = body.rows || [];
+    if (body.csvText) rows = parseXeroCsvText(body.csvText);
+    const preview = matchXeroRows(book, rows);
+    applyItems = preview.items.filter((i) => i.matched);
+  }
+
   let n = 0;
   const skipped = [];
-  for (const row of rows) {
-    const abn = String(row.abn || '').replace(/\s/g, '');
-    const name = String(row.contact || row.entity || '').toUpperCase();
+  for (const row of applyItems) {
+    const c = await PracticeClient.findById(row.clientId);
+    if (!c || c.status === 'Inactive') continue;
     const amount = Number(row.amount) || 0;
-    let c = null;
-    if (abn) c = await PracticeClient.findOne({ ...ACTIVE, abn: new RegExp(abn.replace(/(\d)/g, '$1\\s*')) });
-    if (!c && name) c = await PracticeClient.findOne({ ...ACTIVE, entity: name });
-    if (!c) continue;
     const expected = payExpected(c);
-    let result = 'Not Paid';
-    if (amount >= expected) result = 'Paid';
-    else if (amount > 0) result = 'Part Paid';
+    let result = row.result;
+    if (!result) {
+      result = amount >= expected * 0.99 ? 'Paid' : amount > 0 ? 'Part Paid' : 'Not Paid';
+    }
     const invoice =
       normalizeInvoice(row.invoice || row.invoiceNo || row.invoiceNumber) ||
       normalizeInvoice(c.inv?.[curQ]);
@@ -2036,7 +2435,13 @@ async function reconcileXero(user, body) {
       c.inv = { ...(c.inv || {}), [curQ]: invoice };
       c.markModified('inv');
     }
-    c.recon[curQ] = { date: today, by: actorName(user), amount, invoice: invoice || null, src: 'Xero' };
+    c.recon[curQ] = {
+      date: today,
+      by: actorName(user),
+      amount,
+      invoice: invoice || null,
+      src: 'Xero',
+    };
     c.markModified('payq');
     c.markModified('recon');
     c.activity.push({
@@ -2077,6 +2482,10 @@ module.exports = {
   exportClients,
   applyFeeUplift,
   reconcileXero,
+  previewXero,
+  exportPaymentsCsv,
+  exportBillingGapsCsv,
+  updateCmSettings,
   getSettings,
   isFirmRole,
   canEditClient,
@@ -2084,6 +2493,7 @@ module.exports = {
   scopeClients,
   payExpected,
   payOwing,
+  monthlyFee,
   exposure,
   lodgementStats,
   curLabel,

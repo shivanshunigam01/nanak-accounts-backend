@@ -23,7 +23,10 @@ router.post('/groups/link', c.linkGroup);
 router.post('/groups/consolidate', c.consolidateGroup);
 
 router.get('/payments', c.getPayments);
+router.get('/payments/export', c.exportPayments);
+router.get('/payments/billing-gaps-export', c.exportBillingGaps);
 router.post('/payments/fee-uplift', c.applyFeeUplift);
+router.post('/payments/preview-xero', c.previewXero);
 router.post('/payments/reconcile-xero', c.reconcileXero);
 
 router.get('/payroll', c.getPayroll);
@@ -33,6 +36,8 @@ router.get('/super', c.getSuper);
 router.get('/lodgement', c.getLodgement);
 router.get('/reminders', c.getReminders);
 router.post('/reminders/export', c.exportReminders);
+
+router.patch('/settings', c.updateSettings);
 
 router.post('/fy/start', c.startFY);
 router.post('/fy/advance-quarter', c.advanceQuarter);

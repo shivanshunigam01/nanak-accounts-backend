@@ -67,9 +67,29 @@ exports.applyFeeUplift = asyncHandler(async (req, res) => {
   res.json({ success: true, ...data });
 });
 
+exports.previewXero = asyncHandler(async (req, res) => {
+  const data = await svc.previewXero(req.user, req.body);
+  res.json({ success: true, ...data });
+});
+
 exports.reconcileXero = asyncHandler(async (req, res) => {
   const data = await svc.reconcileXero(req.user, req.body);
   res.json({ success: true, ...data });
+});
+
+exports.exportPayments = asyncHandler(async (req, res) => {
+  const data = await svc.exportPaymentsCsv(req.user);
+  res.json({ success: true, ...data });
+});
+
+exports.exportBillingGaps = asyncHandler(async (req, res) => {
+  const data = await svc.exportBillingGapsCsv(req.user);
+  res.json({ success: true, ...data });
+});
+
+exports.updateSettings = asyncHandler(async (req, res) => {
+  const meta = await svc.updateCmSettings(req.user, req.body);
+  res.json({ success: true, meta });
 });
 
 exports.getPayroll = asyncHandler(async (req, res) => {
