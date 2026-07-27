@@ -146,10 +146,37 @@ const importPriceBook = asyncHandler(async (req, res) => {
 
 // ─── Saved quotes ───
 
-const listQuotes = asyncHandler(async (_req, res) => {
-  const quotes = await QuotePadQuote.find().sort({ updatedAt: -1 }).limit(500).lean();
+const listQuotes = asyncHandler(async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 500));
+  const filter = {};
+
+  if (q) {
+    const digits = q.replace(/\D/g, '');
+    const or = [
+      { title: new RegExp(escapeRegex(q), 'i') },
+      { label: new RegExp(escapeRegex(q), 'i') },
+      { 'data.contact': new RegExp(escapeRegex(q), 'i') },
+      { 'data.biz': new RegExp(escapeRegex(q), 'i') },
+      { 'data.household': new RegExp(escapeRegex(q), 'i') },
+      { 'data.entity': new RegExp(escapeRegex(q), 'i') },
+      { 'data.email': new RegExp(escapeRegex(q), 'i') },
+      { 'data.phone': new RegExp(escapeRegex(q), 'i') },
+    ];
+    if (digits) {
+      const asNum = Number(digits);
+      if (!Number.isNaN(asNum)) or.push({ number: asNum });
+    }
+    filter.$or = or;
+  }
+
+  const quotes = await QuotePadQuote.find(filter).sort({ updatedAt: -1 }).limit(limit).lean();
   res.json({ success: true, quotes });
 });
+
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 const getQuote = asyncHandler(async (req, res) => {
   const quote = await QuotePadQuote.findById(req.params.id).lean();

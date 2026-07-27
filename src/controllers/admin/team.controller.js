@@ -2,12 +2,14 @@ const { body, param } = require('express-validator');
 const User = require('../../models/User');
 const Submission = require('../../models/Submission');
 const { asyncHandler } = require('../../middleware/asyncHandler');
-const { MODULE_KEYS, effectiveModules } = require('../../config/modules');
+const { MODULE_KEYS, sanitizeModulePermissions, effectiveModules } = require('../../config/modules');
 
 function sanitizePermissions(value) {
   if (value === null) return null;
   if (!Array.isArray(value)) return undefined;
-  const cleaned = value.filter((k) => typeof k === 'string' && MODULE_KEYS.includes(k));
+  const cleaned = sanitizeModulePermissions(
+    value.filter((k) => typeof k === 'string' && MODULE_KEYS.includes(k))
+  );
   return cleaned.length ? cleaned : null;
 }
 
