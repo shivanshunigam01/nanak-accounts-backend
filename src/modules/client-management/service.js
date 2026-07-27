@@ -524,10 +524,23 @@ function applyLifecycleChange(user, c, body, today, who) {
   });
 }
 
-async function getSettings() {
+/** Short TTL so hot CM routes don't re-hit PracticeSettings on every nested call. */
+let settingsCache = { at: 0, doc: null };
+const SETTINGS_TTL_MS = 5_000;
+
+async function getSettings({ fresh = false } = {}) {
+  const now = Date.now();
+  if (!fresh && settingsCache.doc && now - settingsCache.at < SETTINGS_TTL_MS) {
+    return settingsCache.doc;
+  }
   let s = await PracticeSettings.findOne({ singleton: 'default' });
   if (!s) s = await PracticeSettings.create({ singleton: 'default' });
+  settingsCache = { at: now, doc: s };
   return s;
+}
+
+function invalidateSettingsCache() {
+  settingsCache = { at: 0, doc: null };
 }
 
 function todayFromSettings(settings) {
@@ -555,12 +568,44 @@ function curDue(settings) {
   return q?.due || '';
 }
 
+/** Strip heavy arrays from list/dashboard payloads (profile still loads full docs). */
+const CLIENT_LEAN_SELECT = '-activity -history -notes';
+
+/** Short TTL cache for Active client lean lists (dashboard/payments/lodgement share this). */
+const scopeCache = new Map();
+const SCOPE_CACHE_TTL_MS = 30_000;
+
+function scopeCacheKey(user, extra, select) {
+  const uid = isFirmRole(user) ? 'firm' : String(user._id || user.id || '');
+  return `${uid}|${select}|${JSON.stringify(extra || {})}`;
+}
+
 /** Every operational view (dashboard, payroll, super, lodgement, fees) is Active-only. */
-async function scopeClients(user, extra = {}) {
+async function scopeClients(user, extra = {}, opts = {}) {
   const filter = { ...ACTIVE, ...extra };
   if (!isFirmRole(user)) Object.assign(filter, staffAllocationFilter(user));
-  const [settings, clients] = await Promise.all([getSettings(), PracticeClient.find(filter).lean()]);
-  return hydrateClientsForWorkingYear(clients, settings);
+  const select = opts.select || CLIENT_LEAN_SELECT;
+  const key = scopeCacheKey(user, extra, select);
+  const now = Date.now();
+  const hit = scopeCache.get(key);
+  if (!opts.hydrate && hit && now - hit.at < SCOPE_CACHE_TTL_MS) {
+    return hit.clients;
+  }
+  const [settings, clients] = await Promise.all([
+    getSettings(),
+    PracticeClient.find(filter).select(select).lean(),
+  ]);
+  // Denormalized bas/payq/onTime on the client doc are kept in sync on writes;
+  // skip period-store hydrate on bulk reads unless explicitly requested.
+  if (opts.hydrate === true) {
+    return hydrateClientsForWorkingYear(clients, settings);
+  }
+  scopeCache.set(key, { at: now, clients });
+  return clients;
+}
+
+function invalidateScopeCache() {
+  scopeCache.clear();
 }
 
 const BAS_STATUSES = ['Completed', 'In Progress', 'Not Completed', 'Not Required'];
@@ -681,14 +726,29 @@ async function syncManagerNamesFromTeam() {
   const users = await User.find({ _id: { $in: ids } }).select('_id name').lean();
   const byId = new Map(users.map((u) => [String(u._id), u.name]));
 
-  let fixed = 0;
+  const ops = [];
   for (const c of linked) {
     const canonical = byId.get(String(c.managerId));
     if (!canonical || String(c.managerName || '') === canonical) continue;
-    await PracticeClient.updateOne({ _id: c._id }, { $set: { managerName: canonical } });
-    fixed++;
+    ops.push({
+      updateOne: {
+        filter: { _id: c._id },
+        update: { $set: { managerName: canonical } },
+      },
+    });
   }
-  return fixed;
+  if (ops.length) await PracticeClient.bulkWrite(ops, { ordered: false });
+  return ops.length;
+}
+
+/** Repair/sync at most once per TTL — not on every clients list request. */
+let managerHealAt = 0;
+const MANAGER_HEAL_TTL_MS = 60_000;
+async function maybeHealManagers() {
+  const now = Date.now();
+  if (now - managerHealAt < MANAGER_HEAL_TTL_MS) return;
+  managerHealAt = now;
+  await Promise.all([repairMissingManagerIds(), syncManagerNamesFromTeam()]);
 }
 
 function lodgementStats(list, settings) {
@@ -751,9 +811,11 @@ function serializeClient(c) {
 async function getMeta(user) {
   await ensureV4Migration();
   const settings = await getSettings();
-  const { periods, summary: periodSummary } = await listPeriods(settings);
-  // Client managers = Team staff/managers (deduped). Admins are not assignable managers.
-  const staff = await listAssignableTeamMembers();
+  // Light periods for nav/layout — skip ClientPeriodStatus aggregate (Fy page uses /periods).
+  const [{ periods, summary: periodSummary }, staff] = await Promise.all([
+    listPeriods(settings, { enrich: false }),
+    listAssignableTeamMembers(),
+  ]);
   return {
     activeFy: settings.workingFy || settings.activeFy,
     workingFy: settings.workingFy || settings.activeFy,
@@ -785,11 +847,15 @@ async function getDashboard(user) {
   const curQ = settings.currentQuarter;
   const curQL = curLabel(settings);
   const clients = await scopeClients(user);
-  const groups = await PracticeGroup.find({ active: true }).lean();
+  const groups = await PracticeGroup.find({ active: true }).select('_id name').lean();
   const rate = settings.payrollRate;
   const threshold = settings.onTimeThreshold;
   const today = todayFromSettings(settings);
-  const { runs } = await loadRuns(clients, settings);
+  // Only generate pay runs for payroll clients (big CPU win vs all active clients).
+  const { runs } = await loadRuns(
+    clients.filter((c) => c.payroll && c.payrollFreq),
+    settings
+  );
 
   const gst = clients.filter((c) => c.gst);
   let done = 0;
@@ -1051,30 +1117,50 @@ function rankClientSearch(c, qRaw) {
 
 async function listClients(user, query = {}) {
   await ensureV4Migration();
-  // Heal rows that have a manager name but no managerId (common after CSV / partial assigns)
-  await repairMissingManagerIds();
-  await syncManagerNamesFromTeam();
+  // Heal manager links occasionally — not on every page load.
+  await maybeHealManagers();
   const settings = await getSettings();
   const { lifecycle, bas } = splitStatusQuery(query);
   const filter = await clientFilterQuery(user, query);
   const page = Math.max(1, Number(query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
-  let list = await PracticeClient.find(filter).sort({ entity: 1 }).lean();
-  await hydrateClientsForWorkingYear(list, settings);
-  if (bas) {
-    const curQ = settings.currentQuarter;
-    list = list.filter((c) => c.bas?.[curQ] === bas);
-  }
   const q = query.q ? String(query.q).trim() : '';
-  if (q) {
-    list = list
-      .map((c) => ({ c, rank: rankClientSearch(c, q) }))
-      .filter((x) => x.rank.score < 900)
-      .sort((a, b) => a.rank.score - b.rank.score || String(a.c.entity).localeCompare(String(b.c.entity)))
-      .map((x) => x.c);
+  // Search ranking + BAS filter need the full set; plain list uses DB pagination.
+  const needsFullScan = Boolean(bas || q);
+
+  let list;
+  let total;
+  if (needsFullScan) {
+    list = await PracticeClient.find(filter).select(CLIENT_LEAN_SELECT).sort({ entity: 1 }).lean();
+    // BAS filter uses denormalized client.bas (kept in sync on writes).
+    if (bas) {
+      const curQ = settings.currentQuarter;
+      list = list.filter((c) => c.bas?.[curQ] === bas);
+    }
+    if (q) {
+      list = list
+        .map((c) => ({ c, rank: rankClientSearch(c, q) }))
+        .filter((x) => x.rank.score < 900)
+        .sort((a, b) => a.rank.score - b.rank.score || String(a.c.entity).localeCompare(String(b.c.entity)))
+        .map((x) => x.c);
+    }
+    total = list.length;
+    list = list.slice((page - 1) * limit, page * limit);
+  } else {
+    const [rows, count] = await Promise.all([
+      PracticeClient.find(filter)
+        .select(CLIENT_LEAN_SELECT)
+        .sort({ entity: 1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      PracticeClient.countDocuments(filter),
+    ]);
+    list = rows;
+    total = count;
   }
-  const total = list.length;
-  const items = list.slice((page - 1) * limit, page * limit).map((c) => ({
+
+  const items = list.map((c) => ({
     ...serializeClient(c),
     canEdit: canEditClient(user, c),
     isMine: canEditClient(user, c) && user.role !== 'admin',
@@ -1115,7 +1201,10 @@ async function getClient(user, id) {
     members = await PracticeClient.find({ groupId: c.groupId, ...ACTIVE }).lean();
     await hydrateClientsForWorkingYear(members, settings);
   }
-  const { runs } = await loadRuns([c], settings);
+  const [{ runs }, periodsPayload] = await Promise.all([
+    loadRuns([c], settings),
+    listPeriods(settings, { enrich: false }),
+  ]);
   const canEdit = canEditClient(user, c);
   const canEditPayroll = canManagePayrollClient(user, c);
   const memberSerialized = members.map(serializeClient);
@@ -1138,7 +1227,7 @@ async function getClient(user, id) {
       currentQuarter: settings.currentQuarter,
       currentQuarterLabel: curLabel(settings),
       quarters: settings.quarters,
-      periods: (await listPeriods(settings)).periods,
+      periods: periodsPayload.periods,
       annualType: annualType(c),
       exitReasons: EXIT_REASONS,
       relationshipLabels: REL_LABELS,
@@ -1242,6 +1331,7 @@ async function createClient(user, body) {
     ],
   });
   await ensureClientPeriodStatuses(doc.toObject(), settings.workingFy || settings.activeFy);
+  invalidateScopeCache();
   return serializeClient(doc.toObject());
 }
 
@@ -1456,6 +1546,7 @@ async function updateClient(user, id, body) {
   }
   await updateClientPeriods({ client: c, settings, body, today });
   await c.save();
+  invalidateScopeCache();
   return { ...serializeClient(c.toObject()), canEdit: true };
 }
 
@@ -1467,8 +1558,7 @@ async function getAllocation(user) {
   }
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
-  const clients = await PracticeClient.find(ACTIVE).lean();
-  await hydrateClientsForWorkingYear(clients, settings);
+  const clients = await scopeClients(user);
   const by = {};
   for (const c of clients) {
     const key = c.managerName || 'Unassigned';
@@ -1491,8 +1581,10 @@ async function listGroups(user) {
   }
   const settings = await getSettings();
   const groups = await PracticeGroup.find({ active: true }).lean();
-  const clients = await PracticeClient.find({ ...ACTIVE, groupId: { $ne: null } }).lean();
-  await hydrateClientsForWorkingYear(clients, settings);
+  const clients = await PracticeClient.find({ ...ACTIVE, groupId: { $ne: null } })
+    .select(CLIENT_LEAN_SELECT)
+    .lean();
+  // Groups only need bas/annual from denormalized client fields.
   const directorConflicts = [];
 
   const rows = groups.map((g) => {
@@ -2069,6 +2161,7 @@ async function updateCmSettings(user, body) {
     settings.dueDateDefaults = next;
   }
   await settings.save();
+  invalidateSettingsCache();
   return getMeta(user);
 }
 
@@ -2296,8 +2389,8 @@ async function getLodgement(user) {
   }
   const settings = await getSettings();
   const threshold = settings.onTimeThreshold;
-  const clients = await PracticeClient.find(ACTIVE).lean();
-  await hydrateClientsForWorkingYear(clients, settings);
+  const clients = await scopeClients(user);
+  // Lodgement stats use denormalized bas/onTime kept in sync on writes.
   const ls = lodgementStats(clients, settings);
 
   const managerNames = [...new Set(clients.map((c) => c.managerName || 'Unassigned'))];
@@ -2425,6 +2518,7 @@ async function advanceQuarter(user, body) {
   const qKey = body.quarter || settings.currentQuarter;
   settings.currentQuarter = QKEYS.includes(qKey) ? qKey : settings.currentQuarter;
   await settings.save();
+  invalidateSettingsCache();
   return getMeta(user);
 }
 
@@ -2448,6 +2542,7 @@ async function setWorkingYear(user, body) {
     .map((period) => ({ k: period.quarter, l: period.label, due: period.dueDate }));
   if (body.quarter && QKEYS.includes(body.quarter)) settings.currentQuarter = body.quarter;
   await settings.save();
+  invalidateSettingsCache();
   return getMeta(user);
 }
 

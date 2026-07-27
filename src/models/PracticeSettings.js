@@ -66,6 +66,8 @@ const practiceSettingsSchema = new mongoose.Schema(
     payrollRate: { type: Number, default: 25 },
     feeReviewMonths: { type: Number, default: 24 },
     todayOverride: { type: String, default: null },
+    /** Set after go-live period backfill so request paths skip full ensure. */
+    cmPeriodsReady: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

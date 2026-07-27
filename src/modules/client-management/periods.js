@@ -97,8 +97,13 @@ async function loadSettingsDoc(settings) {
   return PracticeSettings.findOne({ singleton: 'default' }).lean();
 }
 
+const periodYearCache = new Map();
+
 async function ensurePeriodsForYear(fy, settings = null) {
   const settingsDoc = await loadSettingsDoc(settings);
+  const cacheKey = `${fy}|${JSON.stringify(settingsDoc?.dueDateDefaults || {})}`;
+  if (periodYearCache.has(cacheKey)) return periodYearCache.get(cacheKey);
+
   const defs = periodDefinitions(fy, settingsDoc);
   await PracticePeriod.bulkWrite(
     defs.map((definition) => ({
@@ -109,7 +114,9 @@ async function ensurePeriodsForYear(fy, settings = null) {
       },
     }))
   );
-  return PracticePeriod.find({ financialYear: fy }).sort({ kind: 1, quarter: 1 }).lean();
+  const rows = await PracticePeriod.find({ financialYear: fy }).sort({ kind: 1, quarter: 1 }).lean();
+  periodYearCache.set(cacheKey, rows);
+  return rows;
 }
 
 function legacyStatusFor(client, period) {
@@ -121,9 +128,21 @@ async function ensureClientPeriodStatuses(clients, fy, settings = null) {
   const rows = Array.isArray(clients) ? clients : [clients];
   if (!rows.length) return;
   const periods = await ensurePeriodsForYear(fy, settings);
+  const clientIds = rows.map((client) => client._id);
+  const periodIds = periods.map((period) => period.periodId);
+  const existing = await ClientPeriodStatus.find({
+    clientId: { $in: clientIds },
+    periodId: { $in: periodIds },
+  })
+    .select('clientId periodId')
+    .lean();
+  const have = new Set(existing.map((row) => `${String(row.clientId)}|${row.periodId}`));
+
   const operations = [];
   for (const client of rows) {
     for (const period of periods) {
+      const key = `${String(client._id)}|${period.periodId}`;
+      if (have.has(key)) continue;
       operations.push({
         updateOne: {
           filter: { clientId: client._id, periodId: period.periodId },
@@ -147,14 +166,26 @@ async function ensureClientPeriodStatuses(clients, fy, settings = null) {
   if (operations.length) await ClientPeriodStatus.bulkWrite(operations, { ordered: false });
 }
 
-async function hydrateClientsForWorkingYear(clients, settings) {
+/**
+ * Overlay working-FY period store onto client.bas / payq / annual.
+ * @param {{ ensure?: boolean }} opts  ensure=true creates missing period rows (writes/migration only)
+ */
+async function hydrateClientsForWorkingYear(clients, settings, opts = {}) {
   const rows = Array.isArray(clients) ? clients : [clients];
   if (!rows.length) return rows;
   const fy = settings.workingFy || settings.activeFy;
-  await ensureClientPeriodStatuses(rows, fy, settings);
+  if (opts.ensure === true) {
+    await ensureClientPeriodStatuses(rows, fy, settings);
+  }
+  const periodDocs = await PracticePeriod.find({ financialYear: fy }).select('periodId').lean();
+  const periodIds = periodDocs.map((period) => period.periodId);
+  if (!periodIds.length) {
+    for (const client of rows) client.periodStatuses = [];
+    return rows;
+  }
   const statuses = await ClientPeriodStatus.find({
     clientId: { $in: rows.map((client) => client._id) },
-    periodId: { $regex: `^${String(fy).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\|` },
+    periodId: { $in: periodIds },
   }).lean();
   const byClient = new Map();
   for (const row of statuses) {
@@ -164,6 +195,11 @@ async function hydrateClientsForWorkingYear(clients, settings) {
   }
   for (const client of rows) {
     const periodRows = byClient.get(String(client._id)) || [];
+    if (!periodRows.length) {
+      // Fall back to legacy fields already on the client document.
+      client.periodStatuses = [];
+      continue;
+    }
     const bas = {};
     const payq = {};
     const inv = {};
@@ -198,8 +234,9 @@ async function hydrateClientsForWorkingYear(clients, settings) {
 /** Attach every FY's period statuses for the client profile Lodgements / previous-years view. */
 async function attachLodgementYears(client, settings) {
   const years = await PracticePeriod.distinct('financialYear');
-  for (const fy of years) {
-    await ensureClientPeriodStatuses(client, fy, settings);
+  // Backfill missing rows for this one client only (new clients / newly opened FYs).
+  if (years.length) {
+    await Promise.all(years.map((fy) => ensureClientPeriodStatuses(client, fy, settings)));
   }
   const [statusRows, periodDocs] = await Promise.all([
     ClientPeriodStatus.find({ clientId: client._id }).lean(),
@@ -265,22 +302,41 @@ async function lockMigrationPeriods() {
 
 async function ensurePeriodMigration(settings) {
   const fy = settings.workingFy || settings.activeFy || '2025-26';
+  let dirty = false;
   if (!settings.workingFy) {
     settings.workingFy = fy;
-    await settings.save();
+    dirty = true;
   }
   if (!settings.dueDateDefaults || !settings.dueDateDefaults.q1) {
     settings.dueDateDefaults = { ...STATUTORY_DEFAULTS };
+    dirty = true;
+  }
+  if (dirty) await settings.save();
+
+  // After the first successful backfill, skip the heavy path entirely.
+  if (settings.cmPeriodsReady) return;
+
+  // Existing DBs (pre-flag) already have statuses — mark ready without re-scanning.
+  const [clientCount, statusCount] = await Promise.all([
+    PracticeClient.estimatedDocumentCount(),
+    ClientPeriodStatus.estimatedDocumentCount(),
+  ]);
+  if (clientCount > 0 && statusCount >= clientCount * 4) {
+    await lockMigrationPeriods();
+    settings.cmPeriodsReady = true;
     await settings.save();
+    return;
   }
 
-  const clients = await PracticeClient.find({}).lean();
+  const clients = await PracticeClient.find({}).select('_id bas annual gst lodged onTime payq inv recon').lean();
   const baseFy = '2025-26';
   await ensureClientPeriodStatuses(clients, baseFy, settings);
   if (fy !== baseFy) {
     await ensureClientPeriodStatuses(clients, fy, settings);
   }
   await lockMigrationPeriods();
+  settings.cmPeriodsReady = true;
+  await settings.save();
 }
 
 async function getPeriodOrThrow(id) {
@@ -334,7 +390,8 @@ function lockStatusFor(period, counts) {
   return 'Open';
 }
 
-async function listPeriods(settings = null) {
+async function listPeriods(settings = null, opts = {}) {
+  const enrich = opts.enrich !== false;
   const settingsDoc = await loadSettingsDoc(settings);
   const workingFy = settingsDoc?.workingFy || settingsDoc?.activeFy || '2025-26';
   const todayRaw = settingsDoc?.todayOverride;
@@ -343,44 +400,49 @@ async function listPeriods(settings = null) {
   today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   const periods = await PracticePeriod.find({}).lean();
-  const aggregates = await ClientPeriodStatus.aggregate([
-    {
-      $group: {
-        _id: '$periodId',
-        total: { $sum: 1 },
-        notStarted: {
-          $sum: {
-            $cond: [{ $in: ['$status', ['Not Started', 'Not Completed']] }, 1, 0],
+  let byPeriod = new Map();
+  if (enrich) {
+    const aggregates = await ClientPeriodStatus.aggregate([
+      {
+        $group: {
+          _id: '$periodId',
+          total: { $sum: 1 },
+          notStarted: {
+            $sum: {
+              $cond: [{ $in: ['$status', ['Not Started', 'Not Completed']] }, 1, 0],
+            },
           },
-        },
-        inProgress: {
-          $sum: {
-            $cond: [{ $eq: ['$status', 'In Progress'] }, 1, 0],
+          inProgress: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'In Progress'] }, 1, 0],
+            },
           },
-        },
-        done: {
-          $sum: {
-            $cond: [{ $in: ['$status', ['Completed', 'Lodged', 'Not Required']] }, 1, 0],
+          done: {
+            $sum: {
+              $cond: [{ $in: ['$status', ['Completed', 'Lodged', 'Not Required']] }, 1, 0],
+            },
           },
         },
       },
-    },
-  ]);
-  const byPeriod = new Map(aggregates.map((row) => [row._id, row]));
+    ]);
+    byPeriod = new Map(aggregates.map((row) => [row._id, row]));
+  }
 
   const enriched = periods.map((period) => {
     const counts = byPeriod.get(period.periodId) || emptyCounts();
     const due = parseDueLabel(period.dueDate);
     const daysUntilDue = due ? dayDiff(due, today) : null;
-    const status = lockStatusFor(period, counts);
+    const status = enrich ? lockStatusFor(period, counts) : period.locked ? 'Locked' : 'Open';
     return {
       ...period,
-      counts: {
-        done: counts.done || 0,
-        notStarted: counts.notStarted || 0,
-        inProgress: counts.inProgress || 0,
-        total: counts.total || 0,
-      },
+      counts: enrich
+        ? {
+            done: counts.done || 0,
+            notStarted: counts.notStarted || 0,
+            inProgress: counts.inProgress || 0,
+            total: counts.total || 0,
+          }
+        : undefined,
       status,
       daysUntilDue,
       dueSort: due ? due.getTime() : Number.MAX_SAFE_INTEGER,
@@ -394,7 +456,7 @@ async function listPeriods(settings = null) {
   const nextToClose = enriched.find((p) => !p.locked) || null;
 
   return {
-    periods: enriched.map(({ dueSort, ...rest }) => rest),
+    periods: enriched.map(({ dueSort, counts, ...rest }) => (enrich ? { ...rest, counts } : rest)),
     summary: {
       open,
       locked,

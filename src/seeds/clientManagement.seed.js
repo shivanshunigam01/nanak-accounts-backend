@@ -495,6 +495,7 @@ async function clearClientManagement() {
         offices: OFFICES,
         quarters: STATUTORY_QUARTERS,
         dueDateDefaults: STATUTORY_DUE_DEFAULTS,
+        cmPeriodsReady: false,
       },
     },
     { upsert: true }
