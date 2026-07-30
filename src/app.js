@@ -134,6 +134,7 @@ app.use('/api', publicRoutes);
 
 app.use('/api/admin/dashboard', dashboardRoutes);
 app.use('/api/admin/tool-sessions', toolSessionsRoutes);
+app.use('/api/admin/div7a', require('./routes/admin/div7a.routes'));
 app.use('/api/admin/submissions', submissionsRoutes);
 app.use('/api/admin/team', teamRoutes);
 app.use('/api/admin/quote-pad', quotePadRoutes);

@@ -18,6 +18,7 @@ const MODULE_KEYS = [
   'quote-pad',
   'quote-pad-pricing',
   'sales-commission',
+  'div-7a',
 ];
 
 /** Parent module → sub-modules that require the parent to be assigned. */
@@ -57,6 +58,7 @@ const ROLE_DEFAULT_MODULES = {
     'deduction-usage',
     'quote-pad',
     'sales-commission',
+    'div-7a',
   ],
   staff: [
     'dashboard',
@@ -66,6 +68,7 @@ const ROLE_DEFAULT_MODULES = {
     'deduction',
     'quote-pad',
     'sales-commission',
+    'div-7a',
   ],
 };
 
