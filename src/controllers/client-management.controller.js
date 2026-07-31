@@ -47,6 +47,11 @@ exports.createGroup = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, group });
 });
 
+exports.renameGroup = asyncHandler(async (req, res) => {
+  const group = await svc.renameGroup(req.user, req.params.id, req.body);
+  res.json({ success: true, group });
+});
+
 exports.linkGroup = asyncHandler(async (req, res) => {
   const data = await svc.linkGroup(req.user, req.body);
   res.json({ success: true, ...data });

@@ -45,8 +45,11 @@ function sanitizeModulePermissions(keys) {
   return MODULE_KEYS.filter((k) => set.has(k));
 }
 
+const FULL_ACCESS_ROLES = new Set(['admin', 'owner']);
+
 const ROLE_DEFAULT_MODULES = {
   admin: [...MODULE_KEYS],
+  owner: [...MODULE_KEYS],
   manager: [
     'dashboard',
     'submissions',
@@ -72,9 +75,13 @@ const ROLE_DEFAULT_MODULES = {
   ],
 };
 
+function isFullAccessRole(role) {
+  return FULL_ACCESS_ROLES.has(role);
+}
+
 function effectiveModules(user) {
   if (!user) return [];
-  if (user.role === 'admin') return [...MODULE_KEYS];
+  if (isFullAccessRole(user.role)) return [...MODULE_KEYS];
   if (Array.isArray(user.permissions) && user.permissions.length > 0) {
     const custom = sanitizeModulePermissions(user.permissions);
     return custom;
@@ -86,6 +93,8 @@ module.exports = {
   MODULE_KEYS,
   MODULE_CHILDREN,
   ROLE_DEFAULT_MODULES,
+  FULL_ACCESS_ROLES,
+  isFullAccessRole,
   sanitizeModulePermissions,
   effectiveModules,
 };

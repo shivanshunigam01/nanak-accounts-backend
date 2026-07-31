@@ -105,7 +105,11 @@ function ensureV4Migration() {
 }
 
 function isFirmRole(user) {
-  return user.role === 'admin' || user.role === 'manager';
+  return user.role === 'admin' || user.role === 'owner' || user.role === 'manager';
+}
+
+function isFullAccessUser(user) {
+  return user && (user.role === 'admin' || user.role === 'owner');
 }
 
 function escapeRegex(value) {
@@ -151,10 +155,11 @@ function isDemoEmail(email) {
   return /@nanak\.demo$/i.test(String(email || ''));
 }
 
-/** Prefer manager role, non-demo email, then more complete (longer) display name. */
+/** Prefer admin/owner, then manager, non-demo email, then more complete (longer) display name. */
 function teamMemberScore(u) {
   let s = 0;
-  if (u.role === 'manager') s += 100;
+  if (u.role === 'admin' || u.role === 'owner') s += 120;
+  else if (u.role === 'manager') s += 100;
   else if (u.role === 'staff') s += 50;
   if (!isDemoEmail(u.email)) s += 40;
   s += Math.min(String(u.name || '').trim().length, 80);
@@ -162,15 +167,20 @@ function teamMemberScore(u) {
 }
 
 /**
- * Team members available as client managers — same people as Team, deduped so
- * "Aditya" / "Aditya Alok" / "ADITYA ALOK" collapse to one canonical user.
+ * Team members available as client managers — same people as Team (all roles),
+ * deduped so "Aditya" / "Aditya Alok" / "ADITYA ALOK" collapse to one canonical user.
  */
 async function listAssignableTeamMembers() {
-  const users = await User.find({ role: { $in: ['staff', 'manager'] }, active: true })
+  const users = await User.find({
+    role: { $in: ['admin', 'owner', 'manager', 'staff'] },
+    active: true,
+  })
     .select('name email role')
     .lean();
   const hasReal = users.some((u) => !isDemoEmail(u.email));
-  const pool = hasReal ? users.filter((u) => !isDemoEmail(u.email)) : users;
+  const pool = hasReal
+    ? users.filter((u) => !isDemoEmail(u.email) || u.role === 'admin' || u.role === 'owner')
+    : users;
 
   // Exact-name dedupe (case/whitespace insensitive)
   const byExact = new Map();
@@ -205,10 +215,10 @@ function pickBestUser(candidates) {
   return [...candidates].sort((a, b) => teamMemberScore(b) - teamMemberScore(a))[0];
 }
 
-/** Admin can edit any client; staff/manager can edit only clients assigned to them. */
+/** Admin/owner can edit any client; staff/manager can edit only clients assigned to them. */
 function canEditClient(user, c) {
   if (!user || !c) return false;
-  if (user.role === 'admin') return true;
+  if (isFullAccessUser(user)) return true;
   if (c.managerId && String(c.managerId) === String(user._id)) return true;
   if (user.name && c.managerName && nameMatchRegex(user.name).test(String(c.managerName).trim())) {
     return true;
@@ -236,14 +246,16 @@ async function resolveManager(managerId, managerName) {
   }
 
   const users = await User.find({
-    role: { $in: ['staff', 'manager', 'admin'] },
+    role: { $in: ['admin', 'owner', 'manager', 'staff'] },
     active: true,
   })
     .select('_id name email role')
     .lean();
 
   const hasReal = users.some((u) => !isDemoEmail(u.email));
-  const pool = hasReal ? users.filter((u) => !isDemoEmail(u.email) || u.role === 'admin') : users;
+  const pool = hasReal
+    ? users.filter((u) => !isDemoEmail(u.email) || u.role === 'admin' || u.role === 'owner')
+    : users;
 
   const key = normalizePersonKey(name);
   const exact = pool.filter((u) => normalizePersonKey(u.name) === key);
@@ -639,7 +651,7 @@ async function clientFilterQuery(user, query = {}) {
       const resolved = await resolveManager(null, query.manager);
       const targetName = resolved.managerName || query.manager;
       const allUsers = await User.find({
-        role: { $in: ['staff', 'manager', 'admin'] },
+        role: { $in: ['admin', 'owner', 'manager', 'staff'] },
         active: true,
       })
         .select('_id name')
@@ -1163,7 +1175,7 @@ async function listClients(user, query = {}) {
   const items = list.map((c) => ({
     ...serializeClient(c),
     canEdit: canEditClient(user, c),
-    isMine: canEditClient(user, c) && user.role !== 'admin',
+    isMine: canEditClient(user, c) && !isFullAccessUser(user),
     searchMatch: q ? rankClientSearch(c, q) : undefined,
   }));
   const [activeCount, inactiveCount] = await Promise.all([
@@ -1463,7 +1475,7 @@ async function updateClient(user, id, body) {
     });
   }
 
-  if ((body.managerId !== undefined || body.managerName !== undefined) && user.role === 'admin') {
+  if ((body.managerId !== undefined || body.managerName !== undefined) && isFullAccessUser(user)) {
     const resolved = await resolveManager(
       body.managerId !== undefined ? body.managerId : c.managerId,
       body.managerName !== undefined ? body.managerName : c.managerName
@@ -1479,8 +1491,8 @@ async function updateClient(user, id, body) {
     if (String(prev) !== String(c.managerName) || body.managerId !== undefined) {
       c.activity.push({ date: today, who, action: `Reallocated to ${c.managerName}` });
     }
-  } else if ((body.managerId !== undefined || body.managerName !== undefined) && user.role !== 'admin') {
-    const err = new Error('Only admin can assign clients to staff/managers');
+  } else if ((body.managerId !== undefined || body.managerName !== undefined) && !isFullAccessUser(user)) {
+    const err = new Error('Only admin/owner can assign clients to staff/managers');
     err.status = 403;
     throw err;
   }
@@ -1534,7 +1546,7 @@ async function updateClient(user, id, body) {
       date: today,
     });
   }
-  if (body.groupId !== undefined && user.role === 'admin') {
+  if (body.groupId !== undefined && isFullAccessUser(user)) {
     c.groupId = body.groupId || null;
   }
   if (typeof body.activitySummary === 'string' && body.activitySummary.trim()) {
@@ -1662,6 +1674,36 @@ async function createGroup(user, body) {
   }
   const g = await PracticeGroup.create({ name: String(body.name || '').trim() });
   return { id: String(g._id), name: g.name };
+}
+
+/** Admin / owner / manager: rename an existing group. */
+async function renameGroup(user, groupId, body) {
+  if (!isFirmRole(user)) {
+    const err = new Error('Only admin or manager can rename groups');
+    err.status = 403;
+    throw err;
+  }
+  const name = String(body?.name || '').trim();
+  if (!name) {
+    const err = new Error('Group name is required');
+    err.status = 400;
+    throw err;
+  }
+  if (name.length > 120) {
+    const err = new Error('Group name is too long');
+    err.status = 400;
+    throw err;
+  }
+  const g = await PracticeGroup.findById(groupId);
+  if (!g || g.active === false) {
+    const err = new Error('Group not found');
+    err.status = 404;
+    throw err;
+  }
+  const prev = g.name;
+  g.name = name;
+  await g.save();
+  return { id: String(g._id), name: g.name, previousName: prev };
 }
 
 /** Admin: link related clients into a group (creates group if host has none). */
@@ -2785,6 +2827,7 @@ module.exports = {
   getAllocation,
   listGroups,
   createGroup,
+  renameGroup,
   linkGroup,
   consolidateGroup,
   getPayments,

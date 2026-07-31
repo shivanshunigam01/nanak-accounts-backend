@@ -44,7 +44,7 @@ const listTeam = asyncHandler(async (_req, res) => {
 const createValidators = [
   body('name').isString().notEmpty(),
   body('email').isEmail().normalizeEmail(),
-  body('role').isIn(['admin', 'manager', 'staff']),
+  body('role').isIn(['admin', 'owner', 'manager', 'staff']),
   body('password').isString().isLength({ min: 6 }),
   body('permissions').optional({ nullable: true }).isArray(),
 ];
@@ -78,7 +78,7 @@ const createMember = asyncHandler(async (req, res) => {
 const updateValidators = [
   param('id').isString().notEmpty(),
   body('name').optional().isString(),
-  body('role').optional().isIn(['admin', 'manager', 'staff']),
+  body('role').optional().isIn(['admin', 'owner', 'manager', 'staff']),
   body('active').optional().isBoolean(),
   body('password').optional().isString().isLength({ min: 6 }),
   body('permissions').optional({ nullable: true }).isArray(),
