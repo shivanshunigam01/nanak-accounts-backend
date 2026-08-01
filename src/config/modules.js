@@ -19,6 +19,7 @@ const MODULE_KEYS = [
   'quote-pad-pricing',
   'sales-commission',
   'div-7a',
+  'command-centre',
 ];
 
 /** Parent module → sub-modules that require the parent to be assigned. */
