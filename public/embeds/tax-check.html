@@ -8,9 +8,10 @@
   html,body{margin:0;padding:0;background:transparent}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
   .ntc{--o:#F26B21;--od:#D9550E;--os:#FEF1E8;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
-    font-family:inherit;max-width:480px;height:208px;overflow:hidden;position:relative}
+    font-family:inherit;max-width:480px;min-height:208px;overflow:hidden;position:relative}
   .ntc *{box-sizing:border-box;margin:0;padding:0}
 
+  .ntc-head{margin-bottom:0}
   .ntc-title{font-size:16px;font-weight:800;color:var(--navy);line-height:1.25;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ntc-sub{font-size:12px;color:var(--grey);margin-top:2px;
@@ -52,12 +53,18 @@
   .ntc-disclaimer{font-size:10px;color:#9CA3AF;margin-top:6px;line-height:1.4;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
-  .ntc-done{display:none;position:absolute;inset:0}
-  .ntc-done .head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .ntc-done{display:none;position:relative;background:transparent;padding-top:2px}
+  .ntc-done .head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
   .ntc-done .tick{width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:#0E7C4A;color:#fff;
     display:flex;align-items:center;justify-content:center;font-size:15px}
-  .ntc-done h4{font-size:14.5px;font-weight:800;color:var(--navy)}
-  .ntc-done p{font-size:12px;color:var(--grey);margin:2px 0 10px;line-height:1.4}
+  .ntc-done h4{font-size:15px;font-weight:800;color:var(--navy);line-height:1.25}
+  .ntc-done p{font-size:12.5px;color:var(--grey);margin:0 0 10px;line-height:1.45}
+
+  /* Success state: hide quiz chrome so labels never stack */
+  .ntc.is-done .ntc-head,
+  .ntc.is-done .ntc-progress,
+  .ntc.is-done #ntc-form{display:none!important}
+  .ntc.is-done .ntc-done{display:block}
 
   .ntc-btn:focus-visible,.ntc-chip:focus-visible,.ntc-field:focus-visible{outline:3px solid rgba(242,107,33,.4);outline-offset:2px}
   @media(prefers-reduced-motion:reduce){.ntc *{animation:none!important;transition:none!important}}
@@ -65,8 +72,10 @@
 </head>
 <body>
 <div class="ntc" id="ntc">
-  <div class="ntc-title">Are you leaving money on the table?</div>
-  <div class="ntc-sub">3 quick questions. Under 30 seconds, no obligation.</div>
+  <div class="ntc-head">
+    <div class="ntc-title">Are you leaving money on the table?</div>
+    <div class="ntc-sub">3 quick questions. Under 30 seconds, no obligation.</div>
+  </div>
   <div class="ntc-progress"><span class="on"></span><span></span><span></span><span></span></div>
 
   <div class="ntc-steps" id="ntc-form">
@@ -113,7 +122,7 @@
       <div class="tick">&#10003;</div>
       <h4>Your result is on its way</h4>
     </div>
-    <p id="ntc-done-msg">Want an accountant to call you about it? Add your mobile - optional.</p>
+    <p id="ntc-done-msg">We've emailed your result. Want an accountant to call you about it? Add your mobile (optional).</p>
     <div class="ntc-row" id="ntc-cb-row">
       <input class="ntc-field" id="ntc-mobile" type="tel" placeholder="Mobile" autocomplete="tel">
       <button class="ntc-btn" id="ntc-cb-submit">Request callback</button>
@@ -257,9 +266,8 @@
 
     btn.disabled=true;
     submitLead(leadPayload).then(function(){
+      root.classList.add('is-done');
       document.getElementById('ntc-form').style.display='none';
-      root.querySelector('.ntc-progress').style.visibility='hidden';
-      document.getElementById('ntc-done').style.display='block';
     }).catch(function(err){
       status.textContent=err.message||'Could not submit. Please try again.';
       status.classList.add('err');
@@ -269,7 +277,10 @@
   document.getElementById('ntc-cb-submit').addEventListener('click',function(){
     const mobile=document.getElementById('ntc-mobile').value.trim();
     const btn=document.getElementById('ntc-cb-submit');
-    if(mobile.length<8) return;
+    if(mobile.length<8){
+      document.getElementById('ntc-done-msg').textContent='Enter a valid Australian mobile so we can call you back.';
+      return;
+    }
     if(!leadPayload) return;
     leadPayload.lead.mobile=mobile;
     leadPayload.lead.callback_requested=true;
@@ -278,7 +289,7 @@
     btn.disabled=true;
     submitLead(leadPayload).then(function(){
       document.getElementById('ntc-cb-row').style.display='none';
-      document.getElementById('ntc-done-msg').textContent='Done. An accountant will call you back on a business day.';
+      document.getElementById('ntc-done-msg').textContent='Thanks — an accountant will call you on a business day.';
     }).catch(function(){
       document.getElementById('ntc-done-msg').textContent='Could not save mobile. Please try again or call 1300 626 258.';
     }).finally(function(){ btn.disabled=false; });
