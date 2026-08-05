@@ -40,6 +40,14 @@ function assert(cond, msg) {
 
     const leadCrm = require("../src/services/lead-crm.service");
     assert(typeof leadCrm.capture === "function", "capture export");
+    assert(leadCrm.mapSource({ source: "newsletter_signup" }) === "newsletter", "map newsletter");
+    assert(leadCrm.mapSource({ channel: "website_popup", source: "free_15min_call" }) === "popup", "map popup");
+    assert(leadCrm.mapSource({ source: "tax_check_quiz" }) === "tax_check", "map tax_check");
+    assert(leadCrm.mapSource({ channel: "blog", source: "free_15min_call" }) === "blog_card", "map blog_card");
+    assert(
+      leadCrm.mapSource({ explicit: "income_tax_calculator", source: "x" }) === "income_tax_calculator",
+      "map calculator"
+    );
 
     console.log("\n== Mongo capture ==");
     if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI missing");
@@ -49,22 +57,69 @@ function assert(cond, msg) {
     await Lead.deleteMany({ email: new RegExp(PREFIX, "i") });
     await Lead.deleteMany({ name: new RegExp(`^${PREFIX}`) });
 
-    const email = `${PREFIX.toLowerCase()}@smoke.test`;
-    const result = await leadCrm.capture({
-      lead: {
-        name: `${PREFIX} Test Lead`,
-        email,
-        phone: "0400000000",
-        source: "income_tax_calculator",
-        message: "Smoke test capture",
+    const channels = [
+      {
+        email: `${PREFIX.toLowerCase()}-nl@smoke.test`,
+        body: {
+          lead: { email: `${PREFIX.toLowerCase()}-nl@smoke.test`, lead_score: 20 },
+          touchpoint: { channel: "website_footer", source: "newsletter_signup", page: "/newsletter" },
+          source: "newsletter",
+        },
+        expect: "newsletter",
       },
-      touchpoint: { source: "income_tax_calculator", page: "/smoke" },
-    });
+      {
+        email: `${PREFIX.toLowerCase()}-pop@smoke.test`,
+        body: {
+          lead: {
+            email: `${PREFIX.toLowerCase()}-pop@smoke.test`,
+            mobile: "0411111111",
+            callback_requested: true,
+            service_interest: "individual_tax",
+          },
+          touchpoint: { channel: "website_popup", source: "free_15min_call", page: "/" },
+        },
+        expect: "popup",
+      },
+      {
+        email: `${PREFIX.toLowerCase()}-tc@smoke.test`,
+        body: {
+          lead: {
+            email: `${PREFIX.toLowerCase()}-tc@smoke.test`,
+            service_interest: "business_tax",
+            quiz_answers: { profile: "sole_trader" },
+          },
+          touchpoint: { channel: "website_footer", source: "tax_check_quiz", page: "/footer" },
+        },
+        expect: "tax_check",
+      },
+      {
+        email: `${PREFIX.toLowerCase()}-blog@smoke.test`,
+        body: {
+          lead: { email: `${PREFIX.toLowerCase()}-blog@smoke.test`, service_interest: "individual_tax" },
+          touchpoint: { channel: "blog", source: "free_15min_call", page: "/blog/x", article_title: "Smoke" },
+          source: "blog_card",
+        },
+        expect: "blog_card",
+      },
+      {
+        email: `${PREFIX.toLowerCase()}-calc@smoke.test`,
+        body: {
+          lead: {
+            name: `${PREFIX} Calc`,
+            email: `${PREFIX.toLowerCase()}-calc@smoke.test`,
+            source: "income_tax_calculator",
+          },
+          touchpoint: { source: "income_tax_calculator", page: "/income-tax-calculator" },
+        },
+        expect: "income_tax_calculator",
+      },
+    ];
 
-    assert(result?.lead?._id, "capture returns lead");
-    const found = await Lead.findById(result.lead._id).lean();
-    assert(!!found, "lead persisted in Mongo");
-    assert(found.email === email.toLowerCase(), "email normalized");
+    for (const ch of channels) {
+      const result = await leadCrm.capture(ch.body);
+      assert(result?.lead?._id, `capture ${ch.expect}`);
+      assert(result.lead.source === ch.expect, `${ch.expect} source stored`);
+    }
 
     const ctrl = require("../src/controllers/leads.controller");
     const res = {
@@ -82,17 +137,14 @@ function assert(cond, msg) {
     await ctrl.list(
       {
         user: { role: "admin", _id: new mongoose.Types.ObjectId(), name: "Smoke" },
-        query: { search: PREFIX },
+        query: { tab: "everything", search: PREFIX.toLowerCase(), limit: 50 },
       },
       res
     );
     const rows = res.body?.data || [];
-    assert(
-      Array.isArray(rows) && rows.some((l) => String(l._id) === String(found._id)),
-      "admin list finds smoke lead"
-    );
+    assert(rows.length >= channels.length, `admin list finds all channel leads (${rows.length})`);
 
-    await Lead.deleteMany({ email: email.toLowerCase() });
+    await Lead.deleteMany({ email: new RegExp(PREFIX, "i") });
     await Lead.deleteMany({ name: new RegExp(`^${PREFIX}`) });
     console.log("\n  (cleaned smoke leads)");
 

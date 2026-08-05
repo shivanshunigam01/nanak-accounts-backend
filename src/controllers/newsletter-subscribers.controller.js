@@ -44,7 +44,8 @@ exports.createOrUpdate = async (req, res) => {
           ? Boolean(lead.marketingOptin)
           : true;
 
-    let crmLead = null;
+    // Lead CRM is source of truth — fail the request if CRM write fails
+    let crmLead;
     try {
       const result = await leadCrm.capture({
         lead: {
@@ -66,6 +67,10 @@ exports.createOrUpdate = async (req, res) => {
       crmLead = result.lead;
     } catch (e) {
       console.error("[newsletter] CRM capture:", e.message);
+      return res.status(e.status || 500).json({
+        success: false,
+        message: e.message || "Failed to save lead",
+      });
     }
 
     let doc = await NewsletterSubscriber.findOne({ email });

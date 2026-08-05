@@ -151,8 +151,8 @@ exports.submitQuizLead = async (req, res) => {
         : new Date(),
     };
 
-    // Dual-write into unified Lead CRM
-    let crmLead = null;
+    // Lead CRM is source of truth — fail the request if CRM write fails
+    let crmLead;
     try {
       const leadCrm = require("../services/lead-crm.service");
       const result = await leadCrm.capture({
@@ -178,6 +178,10 @@ exports.submitQuizLead = async (req, res) => {
       crmLead = result.lead;
     } catch (e) {
       console.error("[blogs] CRM capture:", e.message);
+      return res.status(e.status || 500).json({
+        success: false,
+        message: e.message || "Failed to save lead",
+      });
     }
 
     const matchFilter = blogId
