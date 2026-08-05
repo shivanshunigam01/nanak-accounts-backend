@@ -90,10 +90,20 @@
 </style>
 </head>
 <body>
-
+<!-- Embed mode: hide demo chrome; use ?slug=your-post-slug for live CRM blog binding -->
+<style>
+  body.nbc-embed .demo-article{max-width:none;margin:0;padding:8px;line-height:inherit;font-size:inherit}
+  body.nbc-embed .demo-article>h1,
+  body.nbc-embed .demo-article>.demo-note,
+  body.nbc-embed .demo-article>p{display:none!important}
+  body.nbc-embed .nbc{margin:0 auto}
+  .nbc-live-title{display:none;font-size:13px;font-weight:700;color:#6B7280;margin:0 0 10px;padding:0 4px}
+  body.nbc-embed .nbc-live-title.on{display:block}
+</style>
 <div class="demo-article">
-  <p class="demo-note">Blog card v4. The offer is now the call itself, so email and mobile are both required and both make obvious sense. Tap a profile, fill both fields, book.</p>
-  <h1>How to Set Up Payroll - A Step-by-Step Australian Guide</h1>
+  <p class="demo-note">Blog card v4. Pass <code>?slug=your-post-slug</code> so the card binds to a published CRM blog. Lead posts to <code>/api/blogs/:slug/quiz-lead</code>.</p>
+  <h1 id="nbc-demo-h1">How to Set Up Payroll - A Step-by-Step Australian Guide</h1>
+  <p class="nbc-live-title" id="nbc-live-title"></p>
   <p>...article content ends here. A proper payroll setup saves time later, but it also critically reduces compliance risk from the first pay cycle.</p>
 
 <!-- ================================================================
@@ -103,7 +113,7 @@
   <div class="nbc-top">
     <span class="nbc-flag">Free · No obligation</span>
     <div class="nbc-h">Talk to a real accountant for <span>15 minutes</span></div>
-    <div class="nbc-p">Bring one question. We'll tell you straight if it needs work - and if it doesn't, we'll say that too.</div>
+    <div class="nbc-p" id="nbc-sub">Bring one question. We'll tell you straight if it needs work - and if it doesn't, we'll say that too.</div>
   </div>
 
   <div class="nbc-body">
@@ -160,14 +170,54 @@
 
 <script>
 (function(){
-  var API_BASE = 'https://api.connect.cavaluer.com';
+  var API_BASE = (function () {
+    try { return location.origin; } catch (e) { return 'https://api.connect.cavaluer.com'; }
+  })();
+  var qs = new URLSearchParams(location.search || '');
+  var articleTitle = document.title || null;
+
   function resolveSlug(){
+    var fromQ = qs.get('slug');
+    if (fromQ) return String(fromQ).trim().toLowerCase();
     var el = document.getElementById('nbc');
     var fromAttr = el && el.getAttribute('data-blog-slug');
     if (fromAttr) return String(fromAttr).trim().toLowerCase();
     var parts = (location.pathname || '/').split('/').filter(Boolean);
     return (parts[parts.length - 1] || 'wordpress').toLowerCase();
   }
+
+  // Embed chrome when opened as iframe with slug (or ?embed=1)
+  if (qs.get('slug') || qs.get('embed') === '1' || window !== window.top) {
+    document.body.classList.add('nbc-embed');
+  }
+
+  function bindBlog(slug){
+    if (!slug || slug === 'wordpress' || slug === 'blog-tax-check.html') return;
+    fetch(API_BASE + '/api/blogs/' + encodeURIComponent(slug))
+      .then(function(r){ return r.json(); })
+      .then(function(json){
+        if (!json || !json.success || !json.data) return;
+        var b = json.data;
+        articleTitle = b.title || articleTitle;
+        var live = document.getElementById('nbc-live-title');
+        if (live) {
+          live.textContent = b.title || '';
+          live.classList.add('on');
+        }
+        var demoH = document.getElementById('nbc-demo-h1');
+        if (demoH) demoH.textContent = b.title || demoH.textContent;
+        var el = document.getElementById('nbc');
+        if (el) el.setAttribute('data-blog-slug', b.slug || slug);
+        document.title = (b.title ? b.title + ' — ' : '') + 'Free 15-Minute Call';
+        try {
+          parent.postMessage({ type: 'nanak-blog-card-ready', slug: b.slug, title: b.title, source: 'nanak-blog-card' }, '*');
+        } catch (e) {}
+      })
+      .catch(function(){});
+  }
+
+  bindBlog(resolveSlug());
+
   function submitLead(payload){
     var slug = resolveSlug();
     return fetch(API_BASE + '/api/blogs/' + encodeURIComponent(slug) + '/quiz-lead', {
@@ -176,7 +226,7 @@
       body: JSON.stringify(payload)
     }).then(function(res){
       return res.json().then(function(json){
-        if (!res.ok) throw new Error((json && json.error) || 'Submit failed');
+        if (!res.ok) throw new Error((json && (json.error || json.message)) || 'Submit failed');
         return { ok: true, data: json };
       });
     });
@@ -250,7 +300,7 @@
         channel: 'blog',
         source: 'free_15min_call',
         page: location.pathname || '/',
-        article_title: document.title || null,
+        article_title: articleTitle,
         captured_at: new Date().toISOString()
       }
     };

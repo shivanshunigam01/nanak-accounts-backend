@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nanak Blog List</title>
+<style>
+  html,body{margin:0;padding:0;background:transparent}
+  body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
+  .nbl{--o:#F26B21;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;--bg:#FAF8F5;
+    max-width:720px;margin:0 auto;padding:8px}
+  .nbl *{box-sizing:border-box}
+  .nbl-h{font-size:18px;font-weight:800;color:var(--navy);margin:0 0 4px}
+  .nbl-sub{font-size:13px;color:var(--grey);margin:0 0 14px}
+  .nbl-err{font-size:13px;color:#DC2626;padding:12px;background:#FEF2F2;border-radius:10px}
+  .nbl-empty{font-size:13px;color:var(--grey);padding:20px;text-align:center}
+  .nbl-list{display:grid;gap:10px}
+  .nbl-item{display:flex;gap:12px;align-items:stretch;background:#fff;border:1.5px solid var(--line);
+    border-radius:12px;overflow:hidden;cursor:pointer;text-decoration:none;color:inherit;
+    transition:border-color .15s,box-shadow .15s}
+  .nbl-item:hover{border-color:var(--o);box-shadow:0 2px 10px rgba(27,42,74,.08)}
+  .nbl-cover{width:96px;flex:0 0 96px;background:var(--bg);object-fit:cover;min-height:88px}
+  .nbl-body{padding:10px 12px;flex:1;min-width:0}
+  .nbl-cat{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--o)}
+  .nbl-title{font-size:14.5px;font-weight:800;color:var(--navy);margin:3px 0 4px;line-height:1.3}
+  .nbl-ex{font-size:12.5px;color:var(--grey);line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .nbl-meta{font-size:11px;color:#9CA3AF;margin-top:6px}
+  .nbl-pager{display:flex;gap:8px;justify-content:center;margin-top:14px}
+  .nbl-btn{border:1.5px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;
+    font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--navy)}
+  .nbl-btn:disabled{opacity:.45;cursor:default}
+  .nbl-btn:hover:not(:disabled){border-color:var(--o);color:var(--o)}
+  @media(max-width:480px){.nbl-cover{width:72px;flex-basis:72px}}
+</style>
+</head>
+<body>
+<div class="nbl" id="nbl">
+  <h1 class="nbl-h">Latest from Nanak</h1>
+  <p class="nbl-sub">Published posts from the CRM — tap one to open the free 15‑minute call card.</p>
+  <div id="nbl-root"><div class="nbl-empty">Loading…</div></div>
+</div>
+<script>
+(function () {
+  var API_BASE = (function () {
+    try { return location.origin; } catch (e) { return "https://api.connect.cavaluer.com"; }
+  })();
+  var params = new URLSearchParams(location.search || "");
+  var page = Math.max(1, parseInt(params.get("page") || "1", 10) || 1);
+  var limit = Math.min(24, Math.max(1, parseInt(params.get("limit") || "8", 10) || 8));
+  var cardBase = API_BASE + "/embeds/blog-tax-check.html";
+  var siteBase = (params.get("site") || "https://online.nanakaccountants.com.au").replace(/\/$/, "");
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function cardUrl(slug) {
+    return cardBase + "?slug=" + encodeURIComponent(slug);
+  }
+
+  function render(blogs, pagination) {
+    var root = document.getElementById("nbl-root");
+    if (!blogs.length) {
+      root.innerHTML = '<div class="nbl-empty">No published blogs yet. Create one in Admin → Blogs.</div>';
+      return;
+    }
+    var html = '<div class="nbl-list">';
+    blogs.forEach(function (b) {
+      var cover = b.coverImage
+        ? '<img class="nbl-cover" src="' + esc(b.coverImage.indexOf("http") === 0 ? b.coverImage : API_BASE + b.coverImage) + '" alt="">'
+        : '<div class="nbl-cover"></div>';
+      var when = b.publishedAt || b.createdAt;
+      var date = when ? new Date(when).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "";
+      html +=
+        '<a class="nbl-item" href="' + esc(cardUrl(b.slug)) + '" data-slug="' + esc(b.slug) + '">' +
+        cover +
+        '<div class="nbl-body">' +
+        (b.category ? '<div class="nbl-cat">' + esc(b.category) + "</div>" : "") +
+        '<div class="nbl-title">' + esc(b.title) + "</div>" +
+        (b.excerpt ? '<div class="nbl-ex">' + esc(b.excerpt) + "</div>" : "") +
+        '<div class="nbl-meta">' + esc(date) + (b.authorName ? " · " + esc(b.authorName) : "") + "</div>" +
+        "</div></a>";
+    });
+    html += "</div>";
+    if (pagination && pagination.pages > 1) {
+      html += '<div class="nbl-pager">';
+      html +=
+        '<button type="button" class="nbl-btn" id="nbl-prev"' +
+        (page <= 1 ? " disabled" : "") +
+        ">Previous</button>";
+      html +=
+        '<button type="button" class="nbl-btn" id="nbl-next"' +
+        (page >= pagination.pages ? " disabled" : "") +
+        ">Next</button>";
+      html += "</div>";
+    }
+    root.innerHTML = html;
+
+    var prev = document.getElementById("nbl-prev");
+    var next = document.getElementById("nbl-next");
+    if (prev)
+      prev.onclick = function () {
+        location.search = "?page=" + (page - 1) + "&limit=" + limit;
+      };
+    if (next)
+      next.onclick = function () {
+        location.search = "?page=" + (page + 1) + "&limit=" + limit;
+      };
+
+    // Tell parent which slug was clicked (optional for WP wrappers)
+    root.querySelectorAll(".nbl-item").forEach(function (a) {
+      a.addEventListener("click", function () {
+        try {
+          parent.postMessage(
+            { type: "nanak-blog-open", slug: a.getAttribute("data-slug"), source: "nanak-blog-list" },
+            "*"
+          );
+        } catch (e) {}
+      });
+    });
+  }
+
+  fetch(API_BASE + "/api/blogs?page=" + page + "&limit=" + limit)
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (json) {
+      if (!json || !json.success) throw new Error((json && json.error) || "Failed to load blogs");
+      render(json.data || [], json.pagination);
+      try {
+        parent.postMessage(
+          { type: "nanak-blog-list-height", height: document.documentElement.scrollHeight, source: "nanak-blog-list" },
+          "*"
+        );
+      } catch (e) {}
+    })
+    .catch(function (err) {
+      document.getElementById("nbl-root").innerHTML =
+        '<div class="nbl-err">Could not load blogs. ' + esc(err.message || "") + "</div>";
+    });
+})();
+</script>
+</body>
+</html>
