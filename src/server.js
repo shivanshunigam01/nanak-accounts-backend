@@ -14,6 +14,20 @@ console.log(stripeSecretKey,"stripe");
 async function bootstrap() {
   await connectDB();
 
+  try {
+    const { runLeadMigration } = require('./services/lead-crm.migrate');
+    await runLeadMigration();
+  } catch (e) {
+    console.error('[lead-migrate] boot error:', e.message);
+  }
+
+  try {
+    const { startLeadCrmWorker } = require('./services/lead-crm.worker');
+    startLeadCrmWorker();
+  } catch (e) {
+    console.error('[lead-worker] boot error:', e.message);
+  }
+
   const server = http.createServer(app);
   server.listen(PORT, () => {
     console.log(`🚀 API running on http://localhost:${PORT}`);

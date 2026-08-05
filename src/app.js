@@ -32,16 +32,28 @@ const jobApplicationRoutes = require("./routes/job-applications.routes.js");
 const bookkeepingRoutes = require("./routes/bookkeepingPricingRoutes");
 const payrollRoutes = require("./routes/payrollPricingRoutes");
 const webinarUploadsDir = path.join(__dirname, "uploads", "webinars");
+const blogUploadsDir = path.join(__dirname, "uploads", "blogs");
 
 
 if (!fs.existsSync(webinarUploadsDir)) {
   fs.mkdirSync(webinarUploadsDir, { recursive: true });
+}
+if (!fs.existsSync(blogUploadsDir)) {
+  fs.mkdirSync(blogUploadsDir, { recursive: true });
 }
 
 // Import routes
 const webinarRoutes = require("./routes/webinar.routes");
 const adminWebinarRoutes = require("./routes/admin-webinar.routes");
 const adminWebinarRegRoutes = require("./routes/admin-webinar-registration.routes.js");
+const blogRoutes = require("./routes/blog.routes");
+const adminBlogRoutes = require("./routes/admin-blog.routes");
+const taxCheckLeadsRoutes = require("./routes/tax-check-leads.routes");
+const adminTaxCheckLeadsRoutes = require("./routes/admin/tax-check-leads.routes");
+const newsletterSubscribersRoutes = require("./routes/newsletter-subscribers.routes");
+const adminNewsletterSubscribersRoutes = require("./routes/admin/newsletter-subscribers.routes");
+const leadsRoutes = require("./routes/leads.routes");
+const adminLeadsRoutes = require("./routes/admin/leads.routes");
 const benchmarkModuleRoutes = require("./modules/benchmark/benchmark.routes");
 
 
@@ -58,8 +70,10 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Basic security + logging
+// frameguard disabled so /embeds can set frame-ancestors for marketing-site iframes
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  frameguard: false,
 }));
 app.use(morgan('dev'));
 
@@ -78,7 +92,12 @@ app.use(
       "https://www.loveable.app",
       "http://localhost:8081",
       "https://loveable.com","loveableproject.com","https://loveableproject.com","https://www.loveableproject.com",".loveableproject.com",
-      "https://online.nanakaccountants.com.au", "https://admin.nanakaccountants.com.au", "https://admin.nanakaccountants.com.au/login"    ],
+      "https://online.nanakaccountants.com.au",
+      "https://admin.nanakaccountants.com.au",
+      "https://admin.nanakaccountants.com.au/login",
+      "https://nanakaccountants.com.au",
+      "https://www.nanakaccountants.com.au",
+    ],
     credentials: true,
   })
 );
@@ -135,6 +154,8 @@ app.use('/api', publicRoutes);
 app.use('/api/admin/dashboard', dashboardRoutes);
 app.use('/api/admin/tool-sessions', toolSessionsRoutes);
 app.use('/api/admin/div7a', require('./routes/admin/div7a.routes'));
+app.use('/api/admin/aml-compliance', require('./routes/admin/aml-compliance.routes'));
+app.use('/api/admin/firm-library', require('./routes/admin/firm-library.routes'));
 app.use('/api/admin/command-centre', require('./routes/admin/commandCentre.routes'));
 
 app.use('/api/admin/submissions', submissionsRoutes);
@@ -156,10 +177,42 @@ app.use('/api/admin/payroll-pricing',payrollRoutes);
 
 // Mount public routes (no auth)
 app.use("/api/webinars", webinarRoutes);
+app.use("/api/blogs", blogRoutes);
+app.use("/api/tax-check-leads", taxCheckLeadsRoutes);
+app.use("/api/newsletter-subscribers", newsletterSubscribersRoutes);
+app.use("/api/leads", leadsRoutes);
 
 // Mount admin routes (auth required)
 app.use("/api/admin/webinars", adminWebinarRoutes);
 app.use("/api/admin/webinar-registrations", adminWebinarRegRoutes);
+app.use("/api/admin/blogs", adminBlogRoutes);
+app.use("/api/admin/tax-check-leads", adminTaxCheckLeadsRoutes);
+app.use("/api/admin/newsletter-subscribers", adminNewsletterSubscribersRoutes);
+app.use("/api/admin/leads", adminLeadsRoutes);
+
+// Footer embeds (iframe-ready: tax-check + newsletter)
+const embedsDir = path.join(__dirname, "../public/embeds");
+app.use(
+  "/embeds",
+  (req, res, next) => {
+    res.setHeader(
+      "Content-Security-Policy",
+      [
+        "frame-ancestors",
+        "'self'",
+        "https://nanakaccountants.com.au",
+        "https://www.nanakaccountants.com.au",
+        "https://online.nanakaccountants.com.au",
+        "https://*.nanakaccountants.com.au",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:8081",
+      ].join(" ")
+    );
+    next();
+  },
+  express.static(embedsDir)
+);
 
 // Benchmark Intelligence Module
 app.use("/api/benchmark", benchmarkModuleRoutes);
@@ -168,6 +221,7 @@ app.use("/api/admin/benchmarks", benchmarkModuleRoutes);
 
 // Serve uploaded webinar images statically
 app.use("/uploads/webinars", express.static(path.resolve(process.cwd(), "uploads/webinars")));
+app.use("/uploads/blogs", express.static(path.resolve(process.cwd(), "uploads/blogs")));
 
 
 

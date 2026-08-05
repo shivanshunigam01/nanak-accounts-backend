@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nanak Tax Check</title>
+<style id="ntc-styles">
+  html,body{margin:0;padding:0;background:transparent}
+  body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
+  .ntc{--o:#F26B21;--od:#D9550E;--os:#FEF1E8;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
+    font-family:inherit;max-width:480px;height:208px;overflow:hidden;position:relative}
+  .ntc *{box-sizing:border-box;margin:0;padding:0}
+
+  .ntc-title{font-size:16px;font-weight:800;color:var(--navy);line-height:1.25;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ntc-sub{font-size:12px;color:var(--grey);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ntc-progress{display:flex;gap:5px;margin:9px 0 10px}
+  .ntc-progress span{height:3px;flex:1;border-radius:2px;background:var(--line);transition:background .3s}
+  .ntc-progress span.on{background:var(--o)}
+
+  .ntc-steps{position:relative;height:132px}
+  .ntc-step{display:none;position:absolute;inset:0}
+  .ntc-step.on{display:block;animation:ntcfade .22s ease}
+  @keyframes ntcfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .ntc-q{font-size:13px;font-weight:700;color:#22252A;margin-bottom:8px;line-height:1.35;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .ntc-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .ntc-chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;
+    font-size:12.5px;font-family:inherit;cursor:pointer;transition:all .15s;color:#22252A;line-height:1.2}
+  .ntc-chip:hover{border-color:var(--o);background:var(--os)}
+  .ntc-chip.sel{border-color:var(--o);background:var(--o);color:#fff;font-weight:600}
+  .ntc-back{background:none;border:none;color:var(--grey);font-size:11.5px;cursor:pointer;
+    font-family:inherit;margin-top:8px;padding:2px 0;text-decoration:underline}
+
+  .ntc-teaser{font-size:12.5px;font-weight:700;color:var(--navy);background:var(--os);
+    border:1px solid #F8D7BE;border-radius:8px;padding:8px 11px;margin-bottom:8px;line-height:1.35;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .ntc-row{display:flex;gap:8px}
+  .ntc-field{flex:1;min-width:0;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;
+    font-size:13.5px;font-family:inherit;outline:none;background:#fff}
+  .ntc-field:focus{border-color:var(--o)}
+  .ntc-btn{background:var(--o);color:#fff;border:none;cursor:pointer;padding:10px 16px;border-radius:9px;
+    font-size:13.5px;font-weight:700;font-family:inherit;white-space:nowrap;transition:background .15s}
+  .ntc-btn:hover{background:var(--od)}
+  .ntc-btn:disabled{opacity:.65;cursor:wait}
+
+  .ntc-status{font-size:11px;color:var(--grey);margin-top:7px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ntc-status.err{color:#DC2626}
+  .ntc-disclaimer{font-size:10px;color:#9CA3AF;margin-top:6px;line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+  .ntc-done{display:none;position:absolute;inset:0}
+  .ntc-done .head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .ntc-done .tick{width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:#0E7C4A;color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:15px}
+  .ntc-done h4{font-size:14.5px;font-weight:800;color:var(--navy)}
+  .ntc-done p{font-size:12px;color:var(--grey);margin:2px 0 10px;line-height:1.4}
+
+  .ntc-btn:focus-visible,.ntc-chip:focus-visible,.ntc-field:focus-visible{outline:3px solid rgba(242,107,33,.4);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){.ntc *{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="ntc" id="ntc">
+  <div class="ntc-title">Are you leaving money on the table?</div>
+  <div class="ntc-sub">3 quick questions. Under 30 seconds, no obligation.</div>
+  <div class="ntc-progress"><span class="on"></span><span></span><span></span><span></span></div>
+
+  <div class="ntc-steps" id="ntc-form">
+    <div class="ntc-step on" data-step="1">
+      <div class="ntc-q">Which best describes you?</div>
+      <div class="ntc-chips">
+        <button class="ntc-chip" data-q="profile" data-v="employee">Salary earner</button>
+        <button class="ntc-chip" data-q="profile" data-v="sole_trader">Sole trader / ABN</button>
+        <button class="ntc-chip" data-q="profile" data-v="company_trust">Company or trust</button>
+        <button class="ntc-chip" data-q="profile" data-v="investor">Investor</button>
+      </div>
+    </div>
+
+    <div class="ntc-step" data-step="2">
+      <div class="ntc-q" id="ntc-q2-label"></div>
+      <div class="ntc-chips" id="ntc-q2-chips"></div>
+      <button class="ntc-back" data-back="1">Back</button>
+    </div>
+
+    <div class="ntc-step" data-step="3">
+      <div class="ntc-q" id="ntc-q3-label"></div>
+      <div class="ntc-chips">
+        <button class="ntc-chip" data-q="review" data-v="this_year">This year</button>
+        <button class="ntc-chip" data-q="review" data-v="1_2_years">1-2 years ago</button>
+        <button class="ntc-chip" data-q="review" data-v="never">Never / DIY</button>
+      </div>
+      <button class="ntc-back" data-back="2">Back</button>
+    </div>
+
+    <div class="ntc-step" data-step="4">
+      <div class="ntc-teaser" id="ntc-teaser"></div>
+      <div class="ntc-row">
+        <input class="ntc-field" id="ntc-email" type="email" placeholder="Email for your result" autocomplete="email">
+        <button class="ntc-btn" id="ntc-submit">Get result</button>
+      </div>
+      <div class="ntc-status" id="ntc-status">No spam. One email with your result, then it's your call.</div>
+      <p class="ntc-disclaimer">General information only, not tax, financial or legal advice. Does not consider your personal circumstances. Nanak Accountants &amp; Associates, Registered Tax Agent 26113345.</p>
+      <button class="ntc-back" data-back="3">Back</button>
+    </div>
+  </div>
+
+  <div class="ntc-done" id="ntc-done">
+    <div class="head">
+      <div class="tick">&#10003;</div>
+      <h4>Your result is on its way</h4>
+    </div>
+    <p id="ntc-done-msg">Want an accountant to call you about it? Add your mobile - optional.</p>
+    <div class="ntc-row" id="ntc-cb-row">
+      <input class="ntc-field" id="ntc-mobile" type="tel" placeholder="Mobile" autocomplete="tel">
+      <button class="ntc-btn" id="ntc-cb-submit">Request callback</button>
+    </div>
+    <p class="ntc-disclaimer">General information only, not personal tax advice. Registered Tax Agent 26113345.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  function submitLead(payload){
+    return fetch('/api/tax-check-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(function(res){
+      return res.json().then(function(body){
+        if(!res.ok || body.success === false){
+          throw new Error((body && body.message) || 'Submission failed');
+        }
+        return body;
+      });
+    });
+  }
+
+  const answers = {};
+  let leadPayload = null;
+  const root = document.getElementById('ntc');
+  const steps = root.querySelectorAll('.ntc-step');
+  const dots = root.querySelectorAll('.ntc-progress span');
+
+  const bands = {
+    employee: { label:'Roughly, your annual income?', metric:'income', opts:[
+      ['under_45k','Under $45k'],['45_120k','$45k-$120k'],['120_190k','$120k-$190k'],['over_190k','Over $190k']]},
+    investor: { label:'Roughly, your annual income?', metric:'income', opts:[
+      ['under_45k','Under $45k'],['45_120k','$45k-$120k'],['120_190k','$120k-$190k'],['over_190k','Over $190k']]},
+    sole_trader: { label:'Roughly, your annual turnover?', metric:'turnover', opts:[
+      ['under_75k','Under $75k'],['75_250k','$75k-$250k'],['250_500k','$250k-$500k'],['over_500k','Over $500k']]},
+    company_trust: { label:'Roughly, your annual turnover?', metric:'turnover', opts:[
+      ['under_250k','Under $250k'],['250_500k','$250k-$500k'],['500k_1m','$500k-$1M'],['over_1m','Over $1M']]}
+  };
+  const q3 = {
+    employee:'When did an accountant last review your deductions and super contributions?',
+    sole_trader:'When did an accountant last review your structure and business expenses?',
+    company_trust:'When did an accountant last review your structure and cost optimisation?',
+    investor:'When did an accountant last review your loans, depreciation and CGT position?'
+  };
+  const map = {
+    employee:{svc:'individual_tax', teaser:'Employees in your bracket commonly miss claimable deductions.'},
+    sole_trader:{svc:'business_tax', teaser:'Sole traders often overpay when structure and deductions go unreviewed.'},
+    company_trust:{svc:'business_advisory', teaser:'Company and trust structures benefit from an annual health check.'},
+    investor:{svc:'property_tax', teaser:'Property investors often overlook depreciation and CGT planning.'}
+  };
+
+  function parentPage(){
+    try {
+      if (document.referrer) {
+        const u = new URL(document.referrer);
+        return u.pathname || '/';
+      }
+    } catch (e) {}
+    return location.pathname || '/';
+  }
+
+  function goto(n){
+    steps.forEach(s=>s.classList.toggle('on', +s.dataset.step===n));
+    dots.forEach((d,i)=>d.classList.toggle('on', i<n));
+    if(n===4) document.getElementById('ntc-teaser').textContent = (map[answers.profile]||map.employee).teaser;
+  }
+  function renderQ2(profile){
+    const b = bands[profile]||bands.employee;
+    document.getElementById('ntc-q2-label').textContent = b.label;
+    document.getElementById('ntc-q3-label').textContent = q3[profile]||q3.employee;
+    const box = document.getElementById('ntc-q2-chips');
+    box.innerHTML='';
+    b.opts.forEach(function(pair){
+      const v = pair[0], label = pair[1];
+      const btn=document.createElement('button');
+      btn.className='ntc-chip'; btn.textContent=label; btn.type='button';
+      btn.addEventListener('click',function(){
+        box.querySelectorAll('.ntc-chip').forEach(function(c){ c.classList.remove('sel'); });
+        btn.classList.add('sel');
+        answers.band=v; answers.band_metric=b.metric;
+        setTimeout(function(){ goto(3); },150);
+      });
+      box.appendChild(btn);
+    });
+  }
+
+  root.querySelectorAll('.ntc-chip[data-q]').forEach(function(ch){
+    ch.type='button';
+    ch.addEventListener('click',function(){
+      ch.parentElement.querySelectorAll('.ntc-chip').forEach(function(c){ c.classList.remove('sel'); });
+      ch.classList.add('sel');
+      answers[ch.dataset.q]=ch.dataset.v;
+      if(ch.dataset.q==='profile'){ renderQ2(ch.dataset.v); setTimeout(function(){ goto(2); },150); }
+      else if(ch.dataset.q==='review'){ setTimeout(function(){ goto(4); },150); }
+    });
+  });
+  root.querySelectorAll('.ntc-back').forEach(function(b){
+    b.type='button';
+    b.addEventListener('click',function(){ goto(+b.dataset.back); });
+  });
+
+  document.getElementById('ntc-submit').addEventListener('click',function(){
+    const email=document.getElementById('ntc-email').value.trim();
+    const status=document.getElementById('ntc-status');
+    const btn=document.getElementById('ntc-submit');
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){
+      status.textContent='Enter a valid email so we can send your result.';
+      status.classList.add('err'); return;
+    }
+    status.classList.remove('err');
+    status.textContent='No spam. One email with your result, then it\'s your call.';
+
+    let score=40;
+    if(answers.review==='never') score+=30;
+    if(answers.review==='1_2_years') score+=15;
+    score += ({'120_190k':15,'over_190k':25,'75_250k':10,'250_500k':20,'over_500k':30,'500k_1m':30,'over_1m':40})[answers.band]||0;
+    if(answers.profile==='company_trust') score+=10;
+    if(answers.profile==='investor') score+=5;
+
+    leadPayload={
+      lead:{ email: email, mobile:null, status:'new',
+        service_interest:(map[answers.profile]||map.employee).svc,
+        lead_score:Math.min(score,100),
+        quiz_answers:{
+          profile:answers.profile,
+        },
+        callback_requested:false
+      },
+      touchpoint:{ channel:'website_footer', source:'tax_check_quiz',
+        page:parentPage(), captured_at:new Date().toISOString() }
+    };
+    leadPayload.lead.quiz_answers[answers.band_metric||'income']=answers.band;
+    leadPayload.lead.quiz_answers.last_review=answers.review;
+    leadPayload.lead.quiz_answers.review_focus=({
+      employee:'deductions_super',sole_trader:'structure_expenses',
+      company_trust:'structure_cost_optimisation',investor:'loans_depreciation_cgt'
+    })[answers.profile]||'deductions_super';
+
+    btn.disabled=true;
+    submitLead(leadPayload).then(function(){
+      document.getElementById('ntc-form').style.display='none';
+      root.querySelector('.ntc-progress').style.visibility='hidden';
+      document.getElementById('ntc-done').style.display='block';
+    }).catch(function(err){
+      status.textContent=err.message||'Could not submit. Please try again.';
+      status.classList.add('err');
+    }).finally(function(){ btn.disabled=false; });
+  });
+
+  document.getElementById('ntc-cb-submit').addEventListener('click',function(){
+    const mobile=document.getElementById('ntc-mobile').value.trim();
+    const btn=document.getElementById('ntc-cb-submit');
+    if(mobile.length<8) return;
+    if(!leadPayload) return;
+    leadPayload.lead.mobile=mobile;
+    leadPayload.lead.callback_requested=true;
+    leadPayload.touchpoint.source='tax_check_quiz_callback';
+    leadPayload.touchpoint.captured_at=new Date().toISOString();
+    btn.disabled=true;
+    submitLead(leadPayload).then(function(){
+      document.getElementById('ntc-cb-row').style.display='none';
+      document.getElementById('ntc-done-msg').textContent='Done. An accountant will call you back on a business day.';
+    }).catch(function(){
+      document.getElementById('ntc-done-msg').textContent='Could not save mobile. Please try again or call 1300 626 258.';
+    }).finally(function(){ btn.disabled=false; });
+  });
+})();
+</script>
+</body>
+</html>

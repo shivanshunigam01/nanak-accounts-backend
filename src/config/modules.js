@@ -11,6 +11,10 @@ const MODULE_KEYS = [
   'pricing',
   'careers',
   'webinars',
+  'blogs',
+  'lead-crm',
+  'website-leads',
+  'newsletter',
   'benchmarks',
   'benchmarks-usage',
   'deduction',
@@ -19,6 +23,8 @@ const MODULE_KEYS = [
   'quote-pad-pricing',
   'sales-commission',
   'div-7a',
+  'aml-compliance',
+  'firm-library',
   'command-centre',
 ];
 
@@ -39,6 +45,8 @@ const CHILD_TO_PARENT = Object.fromEntries(
 function sanitizeModulePermissions(keys) {
   if (!Array.isArray(keys)) return [];
   const set = new Set(keys.filter((k) => MODULE_KEYS.includes(k)));
+  // Legacy website-leads / newsletter grants → lead-crm
+  if (set.has('website-leads') || set.has('newsletter')) set.add('lead-crm');
   for (const [child, parent] of Object.entries(CHILD_TO_PARENT)) {
     if (set.has(child) && !set.has(parent)) set.delete(child);
   }
@@ -56,6 +64,10 @@ const ROLE_DEFAULT_MODULES = {
     'submissions',
     'client-management',
     'reports',
+    'blogs',
+    'lead-crm',
+    'website-leads',
+    'newsletter',
     'benchmarks',
     'benchmarks-usage',
     'deduction',
@@ -63,16 +75,22 @@ const ROLE_DEFAULT_MODULES = {
     'quote-pad',
     'sales-commission',
     'div-7a',
+    'aml-compliance',
   ],
   staff: [
     'dashboard',
     'submissions',
     'client-management',
+    'blogs',
+    'lead-crm',
+    'website-leads',
+    'newsletter',
     'benchmarks',
     'deduction',
     'quote-pad',
     'sales-commission',
     'div-7a',
+    'aml-compliance',
   ],
 };
 
@@ -83,11 +101,17 @@ function isFullAccessRole(role) {
 function effectiveModules(user) {
   if (!user) return [];
   if (isFullAccessRole(user.role)) return [...MODULE_KEYS];
+  let keys;
   if (Array.isArray(user.permissions) && user.permissions.length > 0) {
-    const custom = sanitizeModulePermissions(user.permissions);
-    return custom;
+    keys = sanitizeModulePermissions(user.permissions);
+  } else {
+    keys = [...(ROLE_DEFAULT_MODULES[user.role] || ROLE_DEFAULT_MODULES.staff)];
   }
-  return [...(ROLE_DEFAULT_MODULES[user.role] || ROLE_DEFAULT_MODULES.staff)];
+  // Alias: anyone with legacy lead inboxes gets lead-crm
+  if (keys.includes('website-leads') || keys.includes('newsletter')) {
+    if (!keys.includes('lead-crm')) keys = [...keys, 'lead-crm'];
+  }
+  return keys;
 }
 
 module.exports = {

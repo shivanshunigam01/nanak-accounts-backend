@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nanak Newsletter Signup</title>
+<style id="nnl-styles">
+  html,body{margin:0;padding:0;background:transparent}
+  body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
+  .nnl{--o:#F26B21;--od:#D9550E;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
+    font-family:inherit;max-width:560px}
+  .nnl *{box-sizing:border-box;margin:0;padding:0}
+  .nnl-title{font-size:19px;font-weight:800;color:var(--navy);line-height:1.25}
+  .nnl-sub{font-size:14px;color:#374151;margin-top:8px}
+  .nnl-row{display:flex;gap:10px;margin-top:14px}
+  .nnl-field{flex:1;min-width:0;padding:12px 15px;border:1.5px solid var(--line);border-radius:10px;
+    font-size:14.5px;font-family:inherit;outline:none;background:#fff;color:#22252A}
+  .nnl-field::placeholder{color:#9CA3AF}
+  .nnl-field:focus{border-color:var(--o)}
+  .nnl-btn{background:var(--o);color:#fff;border:none;cursor:pointer;padding:12px 26px;border-radius:10px;
+    font-size:14.5px;font-weight:700;font-family:inherit;white-space:nowrap;transition:background .15s}
+  .nnl-btn:hover{background:var(--od)}
+  .nnl-btn:disabled{opacity:.6;cursor:default}
+  .nnl-note{font-size:11.5px;color:var(--grey);margin-top:9px}
+  .nnl-note.err{color:#DC2626}
+  .nnl-done{display:none;align-items:flex-start;gap:11px;margin-top:14px;
+    background:#E8F4EE;border:1px solid #BFE0CE;border-radius:10px;padding:13px 15px}
+  .nnl-done.on{display:flex}
+  .nnl-done .tick{width:24px;height:24px;flex:0 0 24px;border-radius:50%;background:#0E7C4A;color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px}
+  .nnl-done b{display:block;font-size:14px;color:var(--navy)}
+  .nnl-done span{font-size:12.5px;color:var(--grey)}
+  .nnl-hp{position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden}
+  .nnl-btn:focus-visible,.nnl-field:focus-visible{outline:3px solid rgba(242,107,33,.4);outline-offset:2px}
+  @media(max-width:480px){.nnl-row{flex-direction:column}.nnl-btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="nnl" id="nnl">
+  <div class="nnl-title">Subscribe to our newsletter</div>
+  <div class="nnl-sub">Get tax tips, business insights, and updates delivered to your inbox.</div>
+
+  <div id="nnl-form">
+    <div class="nnl-row">
+      <input class="nnl-field" id="nnl-email" type="email" placeholder="Enter your email" autocomplete="email">
+      <button class="nnl-btn" id="nnl-btn" type="button">Subscribe</button>
+    </div>
+    <input class="nnl-hp" id="nnl-website" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <div class="nnl-note" id="nnl-note">Tax tips and updates from our accountants. Unsubscribe anytime.</div>
+  </div>
+
+  <div class="nnl-done" id="nnl-done">
+    <div class="tick">&#10003;</div>
+    <div>
+      <b>You're subscribed</b>
+      <span>Look out for our next update. Nothing else to do.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function submitSubscriber(payload){
+    return fetch('/api/newsletter-subscribers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(function(res){
+      return res.json().then(function(body){
+        if(!res.ok || body.success === false){
+          throw new Error((body && body.message) || 'Submission failed');
+        }
+        return body;
+      });
+    });
+  }
+
+  function parentPage(){
+    try {
+      if (document.referrer) {
+        return new URL(document.referrer).pathname || '/';
+      }
+    } catch (e) {}
+    return location.pathname || '/';
+  }
+
+  const email = document.getElementById('nnl-email');
+  const btn   = document.getElementById('nnl-btn');
+  const note  = document.getElementById('nnl-note');
+  const hp    = document.getElementById('nnl-website');
+
+  function go(){
+    const v = email.value.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)){
+      note.textContent = 'Enter a valid email address.';
+      note.classList.add('err');
+      email.focus();
+      return;
+    }
+    note.classList.remove('err');
+    note.textContent = 'Tax tips and updates from our accountants. Unsubscribe anytime.';
+    btn.disabled = true; btn.textContent = 'Subscribing...';
+
+    const payload = {
+      lead:{
+        email: v,
+        mobile: null,
+        record_type: 'subscriber',
+        status: 'new',
+        service_interest: null,
+        lead_score: 20,
+        marketing_optin: true,
+        consent: { email_marketing: 'newsletter_v1' },
+        company_website: (hp && hp.value) || ''
+      },
+      touchpoint:{
+        channel: 'website_footer',
+        source: 'newsletter_signup',
+        page: parentPage(),
+        article_title: null,
+        captured_at: new Date().toISOString()
+      }
+    };
+
+    submitSubscriber(payload).then(function(){
+      document.getElementById('nnl-form').style.display = 'none';
+      document.getElementById('nnl-done').classList.add('on');
+    }).catch(function(){
+      btn.disabled = false; btn.textContent = 'Subscribe';
+      note.textContent = 'That didn\'t go through. Try again, or email info@nanakaccountants.com.au';
+      note.classList.add('err');
+    });
+  }
+
+  btn.addEventListener('click', go);
+  email.addEventListener('keydown', function(e){ if(e.key==='Enter') go(); });
+})();
+</script>
+</body>
+</html>
