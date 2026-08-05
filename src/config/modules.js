@@ -25,6 +25,8 @@ const MODULE_KEYS = [
   'div-7a',
   'aml-compliance',
   'firm-library',
+  'income-tax-calculator',
+  'pay-calculator',
   'command-centre',
 ];
 
@@ -76,6 +78,8 @@ const ROLE_DEFAULT_MODULES = {
     'sales-commission',
     'div-7a',
     'aml-compliance',
+    'income-tax-calculator',
+    'pay-calculator',
   ],
   staff: [
     'dashboard',
@@ -91,6 +95,8 @@ const ROLE_DEFAULT_MODULES = {
     'sales-commission',
     'div-7a',
     'aml-compliance',
+    'income-tax-calculator',
+    'pay-calculator',
   ],
 };
 
