@@ -41,7 +41,7 @@ exports.createPublic = async (req, res) => {
 exports.list = async (req, res) => {
   try {
     const {
-      tab = "all",
+      tab = "everything",
       status,
       source,
       service,
@@ -49,7 +49,7 @@ exports.list = async (req, res) => {
       callback,
       search,
       page = 1,
-      limit = 50,
+      limit = 25,
       mine,
     } = req.query;
 
@@ -67,6 +67,7 @@ exports.list = async (req, res) => {
     } else if (tab === "lost") {
       filter.status = "lost";
     }
+    // tab === "everything" → no status filter; show every lead
 
     if (status && status !== "all") filter.status = status;
     if (source) filter.source = source;
@@ -83,7 +84,7 @@ exports.list = async (req, res) => {
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+    const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 25));
     const skip = (pageNum - 1) * lim;
 
     const [total, data] = await Promise.all([
