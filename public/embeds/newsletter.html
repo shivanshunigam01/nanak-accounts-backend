@@ -5,34 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nanak Newsletter Signup</title>
 <style id="nnl-styles">
-  html,body{margin:0;padding:0;background:transparent}
+  html,body{margin:0;padding:0;background:transparent;height:auto;overflow:hidden}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
   .nnl{--o:#F26B21;--od:#D9550E;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
-    font-family:inherit;max-width:560px}
+    font-family:inherit;max-width:100%;width:100%;padding:0}
   .nnl *{box-sizing:border-box;margin:0;padding:0}
-  .nnl-title{font-size:19px;font-weight:800;color:var(--navy);line-height:1.25}
-  .nnl-sub{font-size:14px;color:#374151;margin-top:8px}
-  .nnl-row{display:flex;gap:10px;margin-top:14px}
-  .nnl-field{flex:1;min-width:0;padding:12px 15px;border:1.5px solid var(--line);border-radius:10px;
-    font-size:14.5px;font-family:inherit;outline:none;background:#fff;color:#22252A}
+  .nnl-title{font-size:18px;font-weight:800;color:var(--navy);line-height:1.25}
+  .nnl-sub{font-size:13.5px;color:#374151;margin-top:6px;line-height:1.4}
+  .nnl-row{display:flex;gap:8px;margin-top:12px;align-items:stretch}
+  .nnl-field{flex:1;min-width:0;padding:11px 14px;border:1.5px solid var(--line);border-radius:10px;
+    font-size:16px;font-family:inherit;outline:none;background:#fff;color:#22252A;
+    /* 16px avoids iOS zoom on focus */
+    line-height:1.3;-webkit-appearance:none;appearance:none}
   .nnl-field::placeholder{color:#9CA3AF}
   .nnl-field:focus{border-color:var(--o)}
-  .nnl-btn{background:var(--o);color:#fff;border:none;cursor:pointer;padding:12px 26px;border-radius:10px;
-    font-size:14.5px;font-weight:700;font-family:inherit;white-space:nowrap;transition:background .15s}
+  .nnl-btn{background:var(--o);color:#fff;border:none;cursor:pointer;padding:11px 20px;border-radius:10px;
+    font-size:14.5px;font-weight:700;font-family:inherit;white-space:nowrap;transition:background .15s;
+    flex:0 0 auto;min-height:44px}
   .nnl-btn:hover{background:var(--od)}
   .nnl-btn:disabled{opacity:.6;cursor:default}
-  .nnl-note{font-size:11.5px;color:var(--grey);margin-top:9px}
+  .nnl-note{font-size:11px;color:var(--grey);margin-top:8px;line-height:1.35}
   .nnl-note.err{color:#DC2626}
-  .nnl-done{display:none;align-items:flex-start;gap:11px;margin-top:14px;
-    background:#E8F4EE;border:1px solid #BFE0CE;border-radius:10px;padding:13px 15px}
+  .nnl-done{display:none;align-items:flex-start;gap:10px;margin-top:10px;
+    background:#E8F4EE;border:1px solid #BFE0CE;border-radius:10px;padding:12px 14px}
   .nnl-done.on{display:flex}
-  .nnl-done .tick{width:24px;height:24px;flex:0 0 24px;border-radius:50%;background:#0E7C4A;color:#fff;
-    display:flex;align-items:center;justify-content:center;font-size:13px}
-  .nnl-done b{display:block;font-size:14px;color:var(--navy)}
-  .nnl-done span{font-size:12.5px;color:var(--grey)}
+  .nnl-done .tick{width:22px;height:22px;flex:0 0 22px;border-radius:50%;background:#0E7C4A;color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:12px}
+  .nnl-done b{display:block;font-size:13.5px;color:var(--navy)}
+  .nnl-done span{font-size:12px;color:var(--grey);line-height:1.35}
   .nnl-hp{position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden}
   .nnl-btn:focus-visible,.nnl-field:focus-visible{outline:3px solid rgba(242,107,33,.4);outline-offset:2px}
-  @media(max-width:480px){.nnl-row{flex-direction:column}.nnl-btn{width:100%}}
+
+  /* Mobile: stack field + button, full-width tap targets */
+  @media(max-width:520px){
+    .nnl-title{font-size:17px}
+    .nnl-sub{font-size:13px}
+    .nnl-row{flex-direction:column;gap:8px}
+    .nnl-btn{width:100%;padding:12px 16px}
+    .nnl-field{width:100%}
+  }
 </style>
 </head>
 <body>
@@ -42,7 +53,7 @@
 
   <div id="nnl-form">
     <div class="nnl-row">
-      <input class="nnl-field" id="nnl-email" type="email" placeholder="Enter your email" autocomplete="email">
+      <input class="nnl-field" id="nnl-email" type="email" placeholder="Enter your email" autocomplete="email" inputmode="email" enterkeyhint="send">
       <button class="nnl-btn" id="nnl-btn" type="button">Subscribe</button>
     </div>
     <input class="nnl-hp" id="nnl-website" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -60,6 +71,24 @@
 
 <script>
 (function(){
+  function postHeight(){
+    try {
+      var el = document.getElementById('nnl');
+      var h = Math.ceil(
+        Math.max(
+          el ? el.getBoundingClientRect().height : 0,
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight
+        )
+      );
+      // Small buffer so borders/shadows aren't clipped
+      h += 4;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'newsletter' }, '*');
+      }
+    } catch (e) {}
+  }
+
   function submitSubscriber(payload){
     return fetch('/api/newsletter-subscribers', {
       method: 'POST',
@@ -84,24 +113,25 @@
     return location.pathname || '/';
   }
 
-  const email = document.getElementById('nnl-email');
-  const btn   = document.getElementById('nnl-btn');
-  const note  = document.getElementById('nnl-note');
-  const hp    = document.getElementById('nnl-website');
+  var email = document.getElementById('nnl-email');
+  var btn   = document.getElementById('nnl-btn');
+  var note  = document.getElementById('nnl-note');
+  var hp    = document.getElementById('nnl-website');
 
   function go(){
-    const v = email.value.trim();
+    var v = email.value.trim();
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)){
       note.textContent = 'Enter a valid email address.';
       note.classList.add('err');
       email.focus();
+      postHeight();
       return;
     }
     note.classList.remove('err');
     note.textContent = 'Tax tips and updates from our accountants. Unsubscribe anytime.';
     btn.disabled = true; btn.textContent = 'Subscribing...';
 
-    const payload = {
+    var payload = {
       lead:{
         email: v,
         mobile: null,
@@ -125,15 +155,28 @@
     submitSubscriber(payload).then(function(){
       document.getElementById('nnl-form').style.display = 'none';
       document.getElementById('nnl-done').classList.add('on');
+      postHeight();
     }).catch(function(){
       btn.disabled = false; btn.textContent = 'Subscribe';
       note.textContent = 'That didn\'t go through. Try again, or email info@nanakaccountants.com.au';
       note.classList.add('err');
+      postHeight();
     });
   }
 
   btn.addEventListener('click', go);
   email.addEventListener('keydown', function(e){ if(e.key==='Enter') go(); });
+
+  // Keep host iframe height in sync with real content
+  if (typeof ResizeObserver !== 'undefined') {
+    var ro = new ResizeObserver(function(){ postHeight(); });
+    ro.observe(document.getElementById('nnl'));
+  }
+  window.addEventListener('load', postHeight);
+  window.addEventListener('resize', postHeight);
+  postHeight();
+  setTimeout(postHeight, 50);
+  setTimeout(postHeight, 250);
 })();
 </script>
 </body>
