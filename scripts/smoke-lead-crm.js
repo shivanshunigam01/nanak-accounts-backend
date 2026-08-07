@@ -44,10 +44,8 @@ function assert(cond, msg) {
     assert(leadCrm.mapSource({ channel: "website_popup", source: "free_15min_call" }) === "popup", "map popup");
     assert(leadCrm.mapSource({ source: "tax_check_quiz" }) === "tax_check", "map tax_check");
     assert(leadCrm.mapSource({ channel: "blog", source: "free_15min_call" }) === "blog_card", "map blog_card");
-    assert(
-      leadCrm.mapSource({ explicit: "income_tax_calculator", source: "x" }) === "income_tax_calculator",
-      "map calculator"
-    );
+    assert(leadCrm.mapSource({ explicit: "income_tax_calculator", source: "x" }) === "income_tax_calculator", "map calculator");
+    assert(leadCrm.mapSource({ source: "pay-calculator" }) === "pay_calculator", "map pay calculator");
 
     console.log("\n== Mongo capture ==");
     if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI missing");
@@ -112,6 +110,20 @@ function assert(cond, msg) {
           touchpoint: { source: "income_tax_calculator", page: "/income-tax-calculator" },
         },
         expect: "income_tax_calculator",
+      },
+      {
+        email: `${PREFIX.toLowerCase()}-pay@smoke.test`,
+        body: {
+          lead: {
+            name: `${PREFIX} Pay`,
+            email: `${PREFIX.toLowerCase()}-pay@smoke.test`,
+            source: "pay_calculator",
+            calculator_snapshot: { gross: 95000, take_home: 70000 },
+          },
+          touchpoint: { channel: "calculator", source: "pay_calculator", page: "/pay-calculator" },
+          source: "pay_calculator",
+        },
+        expect: "pay_calculator",
       },
     ];
 

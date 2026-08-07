@@ -8,8 +8,29 @@ const LeadActivity = require("../models/LeadActivity");
 const User = require("../models/User");
 const leadCrm = require("../services/lead-crm.service");
 const leadMailer = require("../services/lead-mailer");
+const { isFullAccessRole, defaultLeadScope } = require("../config/modules");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Staff with leadScope=own only see leads they own. Admin/Owner always see all. */
+function leadScopeIsOwn(user) {
+  if (!user) return true;
+  if (isFullAccessRole(user.role)) return false;
+  const scope = user.leadScope || defaultLeadScope(user.role);
+  return scope === "own";
+}
+
+function assertLeadOwned(req, lead) {
+  if (!leadScopeIsOwn(req.user)) return null;
+  const ownerId = lead.owner?._id || lead.owner;
+  if (!ownerId || String(ownerId) !== String(req.user._id)) {
+    return {
+      status: 403,
+      body: { success: false, message: "You do not have access to this lead" },
+    };
+  }
+  return null;
+}
 
 // ── Public capture ──
 
@@ -54,7 +75,15 @@ exports.list = async (req, res) => {
     } = req.query;
 
     const filter = {};
-    if (tab === "unassigned") {
+    const ownOnly = leadScopeIsOwn(req.user);
+
+    if (ownOnly) {
+      // Scoped staff: always limited to their own leads (ignore pool tabs).
+      filter.owner = req.user._id;
+      if (tab === "won") filter.status = "won";
+      else if (tab === "lost") filter.status = "lost";
+      else if (tab !== "everything") filter.status = { $nin: ["won", "lost"] };
+    } else if (tab === "unassigned") {
       filter.contactedAt = null;
       filter.status = { $nin: ["won", "lost"] };
     } else if (tab === "mine" || mine === "1") {
@@ -72,7 +101,7 @@ exports.list = async (req, res) => {
     if (status && status !== "all") filter.status = status;
     if (source) filter.source = source;
     if (service) filter.serviceInterest = service;
-    if (owner) filter.owner = owner;
+    if (owner && !ownOnly) filter.owner = owner;
     if (callback === "1" || callback === "true") filter.callbackRequested = true;
     if (search) {
       const q = String(search).trim();
@@ -121,6 +150,8 @@ exports.getById = async (req, res) => {
     if (!lead) {
       return res.status(404).json({ success: false, message: "Lead not found" });
     }
+    const denied = assertLeadOwned(req, lead);
+    if (denied) return res.status(denied.status).json(denied.body);
     return res.json({ success: true, data: lead });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -164,6 +195,9 @@ exports.update = async (req, res) => {
     if (!lead) {
       return res.status(404).json({ success: false, message: "Lead not found" });
     }
+    const denied = assertLeadOwned(req, lead);
+    if (denied) return res.status(denied.status).json(denied.body);
+
     const {
       status,
       adminNotes,
@@ -176,6 +210,14 @@ exports.update = async (req, res) => {
       markContacted,
       addNote,
     } = req.body || {};
+
+    // Scoped staff cannot reassign leads away from themselves.
+    if (leadScopeIsOwn(req.user) && owner !== undefined) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot reassign leads with your current lead scope",
+      });
+    }
 
     if (status && ["new", "contacted", "won", "lost"].includes(status)) {
       lead.status = status;
@@ -202,8 +244,19 @@ exports.update = async (req, res) => {
       lead.adminNotes = adminNotes !== undefined ? adminNotes : notes;
     }
     if (owner !== undefined) {
-      lead.owner = owner || null;
-      lead.routeWhy = owner ? "manual reassignment" : lead.routeWhy;
+      if (owner) {
+        const assignee = await User.findOne({ _id: owner, active: true }).select("_id").lean();
+        if (!assignee) {
+          return res.status(400).json({
+            success: false,
+            message: "Assignee not found or inactive",
+          });
+        }
+        lead.owner = assignee._id;
+        lead.routeWhy = "manual reassignment";
+      } else {
+        lead.owner = null;
+      }
       lead.log.push({ t: "Owner updated", at: new Date(), by: req.user._id });
     }
     if (name !== undefined) lead.name = name;
@@ -232,7 +285,9 @@ exports.update = async (req, res) => {
 
 exports.stats = async (req, res) => {
   try {
-    const open = await Lead.find({ status: { $nin: ["won", "lost"] } })
+    const openFilter = { status: { $nin: ["won", "lost"] } };
+    if (leadScopeIsOwn(req.user)) openFilter.owner = req.user._id;
+    const open = await Lead.find(openFilter)
       .populate("owner", "name")
       .lean();
     const settings = await LeadCrmSettings.getOrCreate();
@@ -247,7 +302,9 @@ exports.stats = async (req, res) => {
       if (now > new Date(l.createdAt).getTime() + target) breached++;
     }
 
-    const done = await Lead.find({ contactedAt: { $ne: null } })
+    const doneFilter = { contactedAt: { $ne: null } };
+    if (leadScopeIsOwn(req.user)) doneFilter.owner = req.user._id;
+    const done = await Lead.find(doneFilter)
       .select("contactedAt createdAt")
       .lean();
     const avg = done.length

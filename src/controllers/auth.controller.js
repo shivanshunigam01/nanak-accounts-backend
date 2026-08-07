@@ -2,11 +2,31 @@ const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const User = require('../models/User');
 const { asyncHandler } = require('../middleware/asyncHandler');
-const { effectiveModules } = require('../config/modules');
+const { serializeUserAccess, defaultLeadScope } = require('../config/modules');
 
 function signToken(userId) {
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn });
+}
+
+function userPayload(user) {
+  const access = serializeUserAccess(user);
+  return {
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    active: user.active,
+    avatar: user.avatar,
+    lastLoginAt: user.lastLoginAt || null,
+    moduleAccess: access.moduleAccess,
+    modules: access.modules,
+    accessLevels: access.accessLevels,
+    leadScope: access.leadScope || defaultLeadScope(user.role),
+    amlOfficer: access.amlOfficer,
+    payrollAccess: access.payrollAccess,
+    permissions: access.modules,
+  };
 }
 
 const loginValidators = [
@@ -33,17 +53,7 @@ const login = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     token,
-    user: {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      active: user.active,
-      avatar: user.avatar,
-      permissions: user.permissions || null,
-      lastLoginAt: user.lastLoginAt,
-      modules: effectiveModules(user),
-    },
+    user: userPayload(user),
   });
 });
 
@@ -53,15 +63,7 @@ const logout = asyncHandler(async (_req, res) => {
 });
 
 const me = asyncHandler(async (req, res) => {
-  const payload = {
-    _id: req.user._id,
-    name: req.user.name,
-    email: req.user.email,
-    role: req.user.role,
-    active: req.user.active,
-    permissions: req.user.permissions || null,
-    modules: effectiveModules(req.user),
-  };
+  const payload = userPayload(req.user);
   // Frontend expects { success, user }; keep flat fields for older clients.
   res.json({ success: true, user: payload, ...payload });
 });

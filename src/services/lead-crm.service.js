@@ -9,11 +9,13 @@ const User = require("../models/User");
 const leadMailer = require("./lead-mailer");
 
 const SRC_LABEL = {
+  blog: "Blog",
   blog_card: "Blog card",
   popup: "Popup",
   newsletter: "Newsletter",
   tax_check: "Tax check",
   income_tax_calculator: "Income tax calculator",
+  pay_calculator: "Pay calculator",
   google_ads: "Google Ads",
   meta_ads: "Meta Ads",
   phone: "Phone call",
@@ -43,7 +45,8 @@ function scoreFor(src, svc, cb) {
   if (src === "referral") s += 15;
   if (src === "walk_in" || src === "phone") s += 10;
   if (src === "newsletter") s -= 30;
-  if (src === "income_tax_calculator") s += 8;
+  if (src === "blog" || src === "blog_card") s += 10;
+  if (src === "income_tax_calculator" || src === "pay_calculator") s += 8;
   return Math.max(15, Math.min(100, s));
 }
 
@@ -54,6 +57,8 @@ function mapSource({ source, channel, explicit }) {
   const ch = String(channel || "").toLowerCase();
   if (src === "newsletter_signup" || src === "newsletter") return "newsletter";
   if (src === "income_tax_calculator" || src === "income-tax-calculator") return "income_tax_calculator";
+  if (src === "pay_calculator" || src === "pay-calculator") return "pay_calculator";
+  if (src === "blog" || src === "blog_sidebar" || ch === "blog_sidebar") return "blog";
   if (ch === "blog" || src === "blog_card") return "blog_card";
   if (ch === "website_popup" || (src === "free_15min_call" && ch !== "blog")) return "popup";
   if (src === "free_15min_call" && ch === "blog") return "blog_card";
@@ -231,6 +236,7 @@ async function capture(raw = {}) {
   const quizAnswers = leadIn.quiz_answers || leadIn.quizAnswers || {};
   const calculatorSnapshot =
     leadIn.calculator_snapshot || leadIn.calculatorSnapshot || raw.calculatorSnapshot || null;
+  const message = String(leadIn.message || leadIn.admin_notes || leadIn.adminNotes || "").trim();
   const articleTitle =
     touchpoint.article_title ||
     touchpoint.articleTitle ||
@@ -294,6 +300,12 @@ async function capture(raw = {}) {
     if (mobile) doc.mobile = mobile;
     if (callbackRequested) doc.callbackRequested = true;
     if (articleTitle) doc.articleTitle = articleTitle;
+    if (message) {
+      doc.adminNotes = doc.adminNotes
+        ? `${doc.adminNotes}\n\n${message}`
+        : message;
+      doc.log.push({ t: `Message: ${message.slice(0, 200)}`, at: new Date() });
+    }
     doc.page = page;
     doc.channel = channel;
     await doc.save();
@@ -317,7 +329,11 @@ async function capture(raw = {}) {
     consent,
     quizAnswers,
     calculatorSnapshot,
-    log: [{ t: `Captured from ${SRC_LABEL[source] || source}`, at: new Date() }],
+    adminNotes: message || "",
+    log: [
+      { t: `Captured from ${SRC_LABEL[source] || source}`, at: new Date() },
+      ...(message ? [{ t: `Message: ${message.slice(0, 200)}`, at: new Date() }] : []),
+    ],
     legacyRef: raw.legacyRef || undefined,
   });
 

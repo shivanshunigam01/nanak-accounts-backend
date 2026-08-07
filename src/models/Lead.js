@@ -5,11 +5,13 @@
 const mongoose = require("mongoose");
 
 const LEAD_SOURCES = [
+  "blog",
   "blog_card",
   "popup",
   "newsletter",
   "tax_check",
   "income_tax_calculator",
+  "pay_calculator",
   "google_ads",
   "meta_ads",
   "phone",

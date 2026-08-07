@@ -7,8 +7,14 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, index: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['admin', 'owner', 'manager', 'staff'], default: 'staff' },
-    // Custom per-user module access. null/empty = use role defaults.
+    // Legacy binary module list — kept for one release; prefer moduleAccess.
     permissions: { type: [String], default: null },
+    permissionsLegacy: { type: [String], default: null },
+    // Module key → none|view|edit|full (only non-none stored).
+    moduleAccess: { type: mongoose.Schema.Types.Mixed, default: null },
+    leadScope: { type: String, enum: ['own', 'all'], default: 'all' },
+    amlOfficer: { type: Boolean, default: false },
+    payrollAccess: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
     avatar: { type: String, default: null },
     lastLoginAt: { type: Date, default: null },
