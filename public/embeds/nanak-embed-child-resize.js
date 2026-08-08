@@ -84,16 +84,38 @@
   function post() {
     try {
       applyFramedStyles();
+      var el = rootEl();
       var h = measure();
       if (!h || h < 40) return;
       if (Math.abs(h - lastHeight) < 4) return;
       lastHeight = h;
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage(
-          { type: "nanak-embed-resize", height: h, source: "embed-child" },
-          "*"
-        );
-        window.parent.postMessage({ type: "resize-iframe", height: h }, "*");
+        var compact =
+          el &&
+          (el.id === "nnl" ||
+            el.id === "ntc" ||
+            el.id === "bsb" ||
+            (el.getAttribute && el.getAttribute("data-embed-tight") === "1"));
+        var payload = {
+          type: "nanak-embed-resize",
+          height: h,
+          source: "embed-child",
+        };
+        if (compact) {
+          payload.compact = true;
+          payload.maxHeight = el.id === "bsb" ? 720 : 260;
+          if (h > payload.maxHeight) {
+            h = payload.maxHeight;
+            payload.height = h;
+            lastHeight = h;
+          }
+        }
+        window.parent.postMessage(payload, "*");
+        // Avoid generic resize-iframe for compact widgets — other page scripts
+        // may apply that height to EVERY iframe on multi-embed pages.
+        if (!compact) {
+          window.parent.postMessage({ type: "resize-iframe", height: h }, "*");
+        }
       }
     } catch (_) {}
   }

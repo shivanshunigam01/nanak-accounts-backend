@@ -110,10 +110,19 @@
     try {
       var h = contentHeight();
       if (!h || h < 40) return;
+      // Hard cap — never allow tall pricing heights to stick on this widget.
+      if (h > 260) h = 260;
       applyParentFrame(h);
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'newsletter' }, '*');
-        window.parent.postMessage({ type: 'resize-iframe', height: h }, '*');
+        // Only nanak-embed-resize (not generic resize-iframe) so other page
+        // listeners cannot blast this height onto every iframe.
+        window.parent.postMessage({
+          type: 'nanak-embed-resize',
+          height: h,
+          source: 'newsletter',
+          compact: true,
+          maxHeight: 260
+        }, '*');
       }
     } catch (e) {}
   }
@@ -207,7 +216,5 @@
   setTimeout(postHeight, 200);
 })();
 </script>
-<!-- universal WP iframe height -->
-<script src="./nanak-embed-child-resize.js" defer></script>
 </body>
 </html>
