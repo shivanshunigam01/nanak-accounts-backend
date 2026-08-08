@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Australian Pay Calculator 2025-26 &amp; 2026-27 | Nanak Accountants</title>
+<meta name="description" content="Accountant-built Australian take-home pay calculator. Income tax, Medicare levy, HECS-HELP marginal repayments, salary sacrifice, super cap checks and the 2026-27 $1,000 instant deduction.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   NANAK BRAND TOKENS - navy blue + orange
+   (matches nanakaccountants.com.au and the income tax
+   calculator tool: Poppins headings, Inter body, white cards,
+   light-blue borders, orange pill CTAs)
+   ============================================================ */
+:root{
+  --navy:#0F2749;
+  --navy-2:#163A66;
+  --blue:#24548F;
+  --blue-border:#D9E2EE;
+  --blue-hover:#B9CFEA;
+  --blue-mist:#EDF2F8;
+  --orange:#F26A21;
+  --orange-deep:#C05A14;
+  --orange-soft:#FEF0E3;
+  --text:#101B2D;
+  --muted:#4C5A6E;
+  --card:#FFFFFF;
+  --green:#1E8A5A;
+  --red:#C0392B;
+  --radius:18px;
+  --pill:999px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:linear-gradient(160deg,#E9F1FA 0%,#F4F7FB 45%,#FDF3EA 100%);
+  color:var(--text);
+  line-height:1.6;
+  font-size:16px;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+/* When framed on the marketing site, hug content height */
+html.framed,html.framed body{min-height:0;height:auto;overflow:auto}
+h1,h2,h3{font-family:'Poppins',sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+/* ---------- header ---------- */
+header{padding:44px 0 34px;text-align:center}
+.eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);background:#fff;border:1px solid var(--blue-border);border-radius:var(--pill);padding:7px 18px;margin-bottom:18px}
+h1{font-weight:800;font-size:clamp(30px,4.6vw,48px);line-height:1.15;color:var(--text);max-width:760px;margin:0 auto}
+h1 .hl{color:var(--orange)}
+.header-note{margin:14px auto 0;color:var(--muted);font-size:16px;max-width:620px}
+.trust-row{display:flex;justify-content:center;gap:22px;flex-wrap:wrap;margin-top:20px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.trust-row span::before{content:"\2713";display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;background:var(--blue-mist);color:var(--blue);font-size:11px;margin-right:7px}
+
+/* ---------- layout ---------- */
+main{padding:14px 0 10px}
+.grid{display:grid;grid-template-columns:400px 1fr;gap:26px;align-items:start}
+@media(max-width:920px){.grid{grid-template-columns:1fr}}
+
+.panel{background:var(--card);border:1px solid var(--blue-border);border-radius:var(--radius);padding:26px;transition:border-color .15s ease}
+.panel:hover{border-color:var(--blue-hover)}
+.panel h2{font-weight:700;font-size:20px;margin-bottom:18px}
+
+/* ---------- inputs ---------- */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
+.field input[type=number],.field input[type=text],.field input[type=email],.field input[type=tel],.field select{
+  width:100%;padding:12px 14px;border:1.5px solid var(--blue-border);border-radius:12px;
+  font-family:'Inter',sans-serif;font-size:16px;color:var(--text);background:#fff;
+  font-variant-numeric:tabular-nums;
+}
+.field input:focus,.field select:focus{outline:2px solid var(--orange);outline-offset:1px;border-color:var(--orange)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:flex;background:var(--blue-mist);border-radius:var(--pill);padding:4px}
+.seg button{flex:1;padding:9px 6px;border:0;background:transparent;border-radius:var(--pill);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer}
+.seg button.active{background:var(--navy);color:#fff}
+.seg button:focus-visible{outline:2px solid var(--orange);outline-offset:-2px}
+.check{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1.5px solid var(--blue-border);border-radius:12px;cursor:pointer;margin-bottom:10px;background:#fff;transition:border-color .15s ease}
+.check:hover{border-color:var(--blue-hover)}
+.check input{margin-top:3px;accent-color:var(--orange);width:17px;height:17px;flex:none}
+.check span{font-size:14.5px;font-weight:500}
+.check small{display:block;color:var(--muted);font-size:12.5px;margin-top:1px;font-weight:400}
+.hint{font-size:12.5px;color:var(--muted);margin-top:5px}
+
+/* ---------- results ---------- */
+.takehome{background:linear-gradient(135deg,#E9F1FB 0%,#F5F9FD 60%,#FDF2E9 100%);border:1px solid var(--blue-border);border-radius:var(--radius);color:var(--text);padding:28px 28px 24px;position:relative;overflow:hidden}
+.takehome::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:var(--orange)}
+.takehome .lbl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);font-weight:700}
+.takehome .big{font-family:'Poppins',sans-serif;font-weight:800;font-size:clamp(40px,6vw,58px);line-height:1.08;font-variant-numeric:tabular-nums;margin:6px 0 2px;color:var(--navy)}
+.takehome .per{font-size:15px;color:var(--muted)}
+.period-tabs{display:flex;gap:6px;margin-top:18px;flex-wrap:wrap}
+.period-tabs button{padding:8px 15px;border-radius:var(--pill);border:1px solid var(--blue-border);background:#fff;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer}
+.period-tabs button:hover{border-color:var(--blue-hover)}
+.period-tabs button.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.rate-chips{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.chip{font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:var(--pill);background:#fff;border:1px solid var(--blue-border);color:var(--blue);font-variant-numeric:tabular-nums}
+
+.payslip{margin-top:22px}
+.payslip table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.payslip th{text-align:left;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 0 10px;font-weight:600}
+.payslip th:last-child,.payslip td:last-child{text-align:right}
+.payslip td{padding:10px 0;border-top:1px solid var(--blue-border);font-size:15px}
+.payslip td .sub{display:block;font-size:12.5px;color:var(--muted)}
+.payslip .neg{color:var(--red)}
+.payslip .pos{color:var(--green);font-weight:700}
+.payslip .total td{border-top:2px solid var(--navy);font-weight:700;font-size:16.5px}
+.payslip .muted td{color:var(--muted);font-size:14px}
+
+/* ---------- lead (compact, light) ---------- */
+.lead{margin-top:22px;background:linear-gradient(135deg,#FDF2E9 0%,#F7FAFD 55%,#EAF1FA 100%);border:1px solid var(--blue-border);border-radius:var(--radius);color:var(--text);padding:20px 22px;position:relative;overflow:hidden}
+.lead::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:var(--orange)}
+.lead h3{font-weight:700;font-size:18px;color:var(--navy)}
+.lead h3 .hl{color:var(--orange)}
+.lead p{font-size:13px;color:var(--muted);margin:4px 0 12px}
+.lead input{border:1.5px solid var(--blue-border);background:#fff;color:var(--text);padding:10px 12px;font-size:14px;border-radius:10px;font-family:'Inter',sans-serif}
+.lead input::placeholder{color:#8A98A9}
+.lead input:focus{outline:2px solid var(--orange);outline-offset:1px;border-color:var(--orange)}
+.lead-grid{display:grid;grid-template-columns:1fr 1.2fr 1fr auto;gap:8px;align-items:center}
+@media(max-width:720px){.lead-grid{grid-template-columns:1fr}}
+.btn{display:inline-block;padding:11px 20px;border-radius:var(--pill);border:0;background:var(--orange);color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;cursor:pointer;text-decoration:none;text-align:center;white-space:nowrap}
+.btn:hover{background:#FF7A31}
+.btn:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+.lead .status{font-size:12.5px;margin-top:8px;min-height:0}
+.lead .status.ok{color:var(--green)}
+.lead .status.err{color:var(--red)}
+.lead .alt-links{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+.lead .alt-links a{color:var(--blue);font-weight:600;text-decoration:none}
+.lead .alt-links a:hover{color:var(--orange)}
+.lead .consent{display:flex;align-items:flex-start;gap:9px;margin-top:12px;cursor:pointer}
+.lead .consent input{width:16px;height:16px;flex:none;margin-top:2px;accent-color:var(--orange);padding:0}
+.lead .consent span{font-size:12.5px;color:var(--muted);line-height:1.5}
+.lead .consent span a{color:var(--blue);text-decoration:underline}
+.lead .consent span a:hover{color:var(--orange)}
+.lead .terms-full{display:none;font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:8px;padding:10px 12px;background:#fff;border:1px solid var(--blue-border);border-radius:10px}
+.lead .terms-full.open{display:block}
+
+/* ---------- footer ---------- */
+footer{margin-top:28px;padding:18px 0 34px;border-top:1px solid var(--blue-border);color:var(--muted);font-size:12.5px;text-align:center}
+footer p{max-width:620px;margin:0 auto}
+footer a{color:var(--blue);font-weight:600;text-decoration:none}
+footer a:hover{color:var(--orange)}
+
+@media(prefers-reduced-motion:no-preference){
+  .big{transition:opacity .12s ease}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Free Calculator | Nanak Accountants &amp; Associates</div>
+    <h1>Know your <span class="hl">real take-home pay</span> in seconds</h1>
+    <p class="header-note">Built by registered tax agents. Updated for 2025-26 and 2026-27 - the new marginal HECS-HELP system, the 15% bracket cut, the $1,000 instant deduction and super cap checks included.</p>
+    <div class="trust-row">
+      <span>Registered Tax Agent 26113345</span>
+      <span>Trusted by 5,000+ businesses</span>
+      <span>Rated 5 stars from 1,000+ reviews</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="grid">
+
+      <!-- ============ INPUTS ============ -->
+      <section class="panel" aria-label="Your details">
+        <h2>Your details</h2>
+
+        <div class="field">
+          <label for="fy">Financial year</label>
+          <div class="seg" id="fySeg" role="group" aria-label="Financial year">
+            <button type="button" data-fy="y2526" class="active">2025-26</button>
+            <button type="button" data-fy="y2627">2026-27</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="salary">Salary</label>
+          <div class="row2">
+            <input type="number" id="salary" min="0" step="500" value="95000" inputmode="decimal" aria-label="Salary amount">
+            <select id="freq" aria-label="Pay frequency">
+              <option value="annual" selected>per year</option>
+              <option value="monthly">per month</option>
+              <option value="fortnightly">per fortnight</option>
+              <option value="weekly">per week</option>
+              <option value="hourly">per hour</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" id="hoursField" style="display:none">
+          <label for="hours">Hours per week</label>
+          <input type="number" id="hours" min="1" max="80" step="0.5" value="38">
+        </div>
+
+        <label class="check"><input type="checkbox" id="incSuper">
+          <span>Salary includes super<small>Tick if your package is quoted inclusive of the 12% super guarantee</small></span>
+        </label>
+
+        <div class="field">
+          <label for="residency">Residency for tax</label>
+          <select id="residency">
+            <option value="resident" selected>Australian resident</option>
+            <option value="nonres">Foreign resident</option>
+            <option value="whm">Working holiday maker</option>
+          </select>
+        </div>
+
+        <label class="check"><input type="checkbox" id="help">
+          <span>I have a HECS-HELP debt<small>Includes HELP, VSL, SSL and AASL study loans</small></span>
+        </label>
+
+        <label class="check" id="instantWrap" style="display:none"><input type="checkbox" id="instant" checked>
+          <span>$1,000 instant work deduction<small>New for 2026-27 - a flat deduction for work expenses, no receipts needed (employees)</small></span>
+        </label>
+
+        <div class="field">
+          <label for="sacrifice">Salary sacrifice to super (per year)</label>
+          <input type="number" id="sacrifice" min="0" step="500" value="0" inputmode="decimal">
+          <p class="hint">Pre-tax super on top of the employer 12%. We check this against your concessional cap.</p>
+        </div>
+
+        <label class="check"><input type="checkbox" id="cover" checked>
+          <span>I hold private hospital cover<small>Affects the Medicare Levy Surcharge only, not the standard 2% levy</small></span>
+        </label>
+
+        <div class="field" id="famField">
+          <label>Medicare Levy Surcharge status</label>
+          <div class="seg" id="famSeg" role="group" aria-label="Surcharge household status">
+            <button type="button" data-fam="single" class="active">Single</button>
+            <button type="button" data-fam="family">Couple / family</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ RESULTS ============ -->
+      <section aria-label="Your results">
+        <div class="takehome">
+          <div class="lbl">Your take-home pay</div>
+          <div class="big" id="bigNum">$0</div>
+          <div class="per" id="bigPer">per fortnight, after tax</div>
+          <div class="period-tabs" id="periodTabs" role="group" aria-label="Display period">
+            <button type="button" data-p="weekly">Weekly</button>
+            <button type="button" data-p="fortnightly" class="active">Fortnightly</button>
+            <button type="button" data-p="monthly">Monthly</button>
+            <button type="button" data-p="annual">Annual</button>
+          </div>
+          <div class="rate-chips">
+            <span class="chip" id="chipEff">Effective tax rate: 0%</span>
+            <span class="chip" id="chipMarg">Marginal rate: 0%</span>
+            <span class="chip" id="chipSuper">Employer super: $0</span>
+          </div>
+        </div>
+
+        <div class="panel payslip">
+          <table aria-label="Pay breakdown">
+            <thead><tr><th>Breakdown</th><th id="colPeriod">Fortnightly</th><th>Annual</th></tr></thead>
+            <tbody id="payslipBody"></tbody>
+          </table>
+        </div>
+
+        <div class="lead" id="lead">
+          <h3>Need this checked, or want <span class="hl">help with your tax?</span></h3>
+          <p>Leave your details and one of our accountants will get back to you.</p>
+          <div class="lead-grid">
+            <input type="text" id="leadName" placeholder="Your name" autocomplete="name" aria-label="Name" style="width:100%">
+            <input type="email" id="leadEmail" placeholder="you@email.com" autocomplete="email" aria-label="Email" style="width:100%">
+            <input type="tel" id="leadPhone" placeholder="Mobile" autocomplete="tel" aria-label="Mobile" style="width:100%">
+            <button class="btn" id="leadBtn" type="button">Get started</button>
+          </div>
+          <div class="status" id="leadStatus" role="status"></div>
+          <label class="consent"><input type="checkbox" id="consentAll">
+            <span>Keep me updated with tax tips and reminders by email, text and phone. Opt out any time. <a href="#" id="termsToggle">Full terms</a></span>
+          </label>
+          <p class="terms-full" id="termsFull">I agree to receive marketing from Nanak Accountants &amp; Associates by email, text message and phone call. I understand calls may be automated, pre-recorded or use an AI voice, that standard message rates may apply, and that this consent applies even if my number is on the Do Not Call Register. I can opt out any time by replying STOP to a text, using the unsubscribe link in any email, or asking not to receive further calls.</p>
+          <p class="alt-links">Optional - you'll get your results either way. <a href="https://nanakaccountants.com.au/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a> &nbsp;|&nbsp; <a href="https://calendly.com/nanakaccountant" target="_blank" rel="noopener">Book a time</a> &nbsp;|&nbsp; <a href="tel:1300626258">1300 626 258</a></p>
+        </div>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      <p>General advice only. Estimates based on ATO rates for 2025-26 and 2026-27. Your circumstances may change the result - speak with us on <a href="tel:1300626258">1300 626 258</a>.</p>
+    </footer>
+  </div>
+</main>
+
+<script>
+/* =====================================================
+   CONFIG — Lead CRM (public, no login)
+   ===================================================== */
+const LEAD_API_URL = "/api/leads";
+const LEAD_SOURCE = "pay_calculator";
+
+if (window.parent && window.parent !== window) {
+  document.documentElement.classList.add("framed");
+}
+
+function postEmbedHeight(){
+  try {
+    var h = Math.ceil(Math.max(
+      document.documentElement.scrollHeight,
+      document.body.scrollHeight
+    )) + 8;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "nanak-embed-resize", height: h, source: "pay-calculator" }, "*");
+    }
+  } catch (e) {}
+}
+
+/* =====================================================
+   TAX ENGINE - FY2025-26 and FY2026-27
+   ===================================================== */
+const RATES = {
+  y2526: {
+    label: "2025-26",
+    resident: [[18200,0],[45000,0.16],[135000,0.30],[190000,0.37],[Infinity,0.45]],
+    nonres:   [[135000,0.30],[190000,0.37],[Infinity,0.45]],
+    whm:      [[45000,0.15],[135000,0.30],[190000,0.37],[Infinity,0.45]],
+    medicare: { lo:27222, hi:34027, rate:0.02, shade:0.10 },
+    mls: {
+      single: [[101000,0],[118000,0.01],[157000,0.0125],[Infinity,0.015]],
+      family: [[202000,0],[236000,0.01],[314000,0.0125],[Infinity,0.015]]
+    },
+    help: { t1:67000, t2:125000, base2:8700, cap:0.10 },
+    sg: 0.12,
+    ccCap: 30000,
+    instantDeduction: 0
+  },
+  y2627: {
+    label: "2026-27",
+    resident: [[18200,0],[45000,0.15],[135000,0.30],[190000,0.37],[Infinity,0.45]],
+    nonres:   [[135000,0.30],[190000,0.37],[Infinity,0.45]],
+    whm:      [[45000,0.15],[135000,0.30],[190000,0.37],[Infinity,0.45]],
+    medicare: { lo:28011, hi:35014, rate:0.02, shade:0.10 },
+    mls: {
+      single: [[105000,0],[123000,0.01],[164000,0.0125],[Infinity,0.015]],
+      family: [[210000,0],[246000,0.01],[328000,0.0125],[Infinity,0.015]]
+    },
+    help: { t1:69528, t2:129716, base2:9028, cap:0.10 },
+    sg: 0.12,
+    ccCap: 32500,
+    instantDeduction: 1000
+  }
+};
+const DIV293_THRESHOLD = 250000;
+
+function progressiveTax(ti, brackets){
+  let tax = 0, prev = 0;
+  for (const [cap, rate] of brackets){
+    if (ti > prev) tax += (Math.min(ti, cap) - prev) * rate;
+    prev = cap;
+    if (ti <= cap) break;
+  }
+  return tax;
+}
+
+function lito(ti){
+  if (ti <= 37500) return 700;
+  if (ti <= 45000) return 700 - (ti - 37500) * 0.05;
+  if (ti <  66667) return 325 - (ti - 45000) * 0.015;
+  return 0;
+}
+
+function medicareLevy(ti, y){
+  const m = RATES[y].medicare;
+  if (ti <= m.lo) return 0;
+  if (ti <= m.hi) return (ti - m.lo) * m.shade;
+  return ti * m.rate;
+}
+
+function mlsAmount(mlsIncome, y, fam, hasCover){
+  if (hasCover) return 0;
+  const tiers = RATES[y].mls[fam];
+  let rate = 0, prev = 0;
+  for (const [cap, r] of tiers){
+    if (mlsIncome > prev) rate = r;
+    prev = cap;
+    if (mlsIncome <= cap) break;
+  }
+  return mlsIncome * rate;
+}
+
+function helpRepayment(ri, y){
+  const h = RATES[y].help;
+  let rep = 0;
+  if (ri <= h.t1) rep = 0;
+  else if (ri <= h.t2) rep = (ri - h.t1) * 0.15;
+  else rep = h.base2 + (ri - h.t2) * 0.17;
+  return Math.min(rep, ri * h.cap);
+}
+
+function bracketsFor(y, res){ return RATES[y][res]; }
+
+function totalTaxAt(ti, y, res, riAdd, fam, cover, hasHelp){
+  let tax = progressiveTax(Math.max(0, ti), bracketsFor(y, res));
+  if (res === "resident") tax = Math.max(0, tax - lito(ti));
+  let med = 0, mls = 0, helpAmt = 0;
+  if (res === "resident"){
+    med = medicareLevy(ti, y);
+    mls = mlsAmount(ti + riAdd, y, fam, cover);
+  }
+  if (hasHelp) helpAmt = helpRepayment(ti + riAdd, y);
+  return { tax, med, mls, helpAmt, total: tax + med + mls + helpAmt };
+}
+
+/* =====================================================
+   STATE + CALC
+   ===================================================== */
+const S = { fy: "y2526", period: "fortnightly", fam: "single" };
+const $ = id => document.getElementById(id);
+const fmt = n => "$" + Math.round(n).toLocaleString("en-AU");
+const pct = n => (n*100).toFixed(1).replace(/\.0$/,"") + "%";
+const DIV = { weekly:52, fortnightly:26, monthly:12, annual:1 };
+const PERLBL = { weekly:"per week", fortnightly:"per fortnight", monthly:"per month", annual:"per year" };
+
+function annualSalaryInput(){
+  const v = parseFloat($("salary").value) || 0;
+  const f = $("freq").value;
+  if (f === "annual") return v;
+  if (f === "monthly") return v * 12;
+  if (f === "fortnightly") return v * 26;
+  if (f === "weekly") return v * 52;
+  if (f === "hourly"){
+    const h = parseFloat($("hours").value) || 38;
+    return v * h * 52;
+  }
+  return v;
+}
+
+function calc(){
+  const y = S.fy, r = RATES[y];
+  const res = $("residency").value;
+  const hasHelp = $("help").checked;
+  const cover = $("cover").checked;
+  const incSuper = $("incSuper").checked;
+  let sacrifice = Math.max(0, parseFloat($("sacrifice").value) || 0);
+
+  let pkg = annualSalaryInput();
+  let base, sg;
+  if (incSuper){ base = pkg / (1 + r.sg); sg = pkg - base; }
+  else { base = pkg; sg = base * r.sg; }
+
+  sacrifice = Math.min(sacrifice, base);
+  const instant = (r.instantDeduction > 0 && $("instant").checked)
+    ? Math.min(r.instantDeduction, Math.max(0, base - sacrifice)) : 0;
+  const taxable = Math.max(0, base - sacrifice - instant);
+  const t = totalTaxAt(taxable, y, res, sacrifice, S.fam, cover, hasHelp);
+
+  // take-home in the hand: instant deduction is a year-end deduction, not a payslip line -
+  // include its tax effect in the annual figure (this is a whole-of-year estimate)
+  const takeHome = base - sacrifice - t.total;
+  const cc = sg + sacrifice;
+  const div293Income = taxable + cc;
+  const div293 = div293Income > DIV293_THRESHOLD
+    ? 0.15 * Math.min(cc, div293Income - DIV293_THRESHOLD) : 0;
+
+  const t2 = totalTaxAt(taxable + 1000, y, res, sacrifice, S.fam, cover, hasHelp);
+  const marginal = (t2.total - t.total) / 1000;
+  const effective = base > 0 ? t.total / base : 0;
+
+  return { y, r, res, base, sg, sacrifice, instant, taxable, ...t, takeHome, cc, div293, div293Income, marginal, effective, hasHelp, cover };
+}
+
+/* =====================================================
+   RENDER
+   ===================================================== */
+function row(label, per, ann, cls, sub){
+  return `<tr class="${cls||""}"><td>${label}${sub?`<span class="sub">${sub}</span>`:""}</td><td style="text-align:right">${per}</td><td style="text-align:right">${ann}</td></tr>`;
+}
+
+function render(){
+  $("instantWrap").style.display = S.fy === "y2627" ? "" : "none";
+  const c = calc();
+  const d = DIV[S.period];
+  $("bigNum").textContent = fmt(c.takeHome / d);
+  $("bigPer").textContent = PERLBL[S.period] + ", after tax";
+  $("chipEff").textContent = "Effective tax rate: " + pct(c.effective);
+  $("chipMarg").textContent = "Marginal rate: " + pct(c.marginal);
+  $("chipSuper").textContent = "Employer super: " + fmt(c.sg) + "/yr";
+  $("colPeriod").textContent = S.period.charAt(0).toUpperCase() + S.period.slice(1);
+
+  let rows = "";
+  rows += row("Gross salary", fmt(c.base/d), fmt(c.base), "", c.res!=="resident" ? "Taxed as " + ($("residency").selectedOptions[0].text.toLowerCase()) : "");
+  if (c.sacrifice > 0) rows += row("Salary sacrifice to super", "-"+fmt(c.sacrifice/d), "-"+fmt(c.sacrifice), "neg");
+  if (c.instant > 0) rows += row("$1,000 instant deduction", "", "-"+fmt(c.instant), "muted", "Applied at tax time, reduces taxable income");
+  if (c.sacrifice > 0 || c.instant > 0) rows += row("Taxable income", fmt(c.taxable/d), fmt(c.taxable), "muted");
+  rows += row("Income tax", "-"+fmt(c.tax/d), "-"+fmt(c.tax), "neg", c.res==="resident" && lito(c.taxable)>0 ? "Includes low income tax offset of "+fmt(Math.min(lito(c.taxable), progressiveTax(c.taxable, bracketsFor(c.y,"resident")))) : "");
+  if (c.res === "resident") rows += row("Medicare levy", "-"+fmt(c.med/d), "-"+fmt(c.med), "neg");
+  if (c.mls > 0) rows += row("Medicare Levy Surcharge", "-"+fmt(c.mls/d), "-"+fmt(c.mls), "neg", "No hospital cover, " + (S.fam==="single"?"single":"family") + " tier");
+  if (c.hasHelp) rows += row("HECS-HELP repayment", "-"+fmt(c.helpAmt/d), "-"+fmt(c.helpAmt), "neg", c.helpAmt>0 ? "Marginal system, " + c.r.label : "Below the " + fmt(c.r.help.t1) + " threshold");
+  rows += `<tr class="total"><td>Take-home pay</td><td style="text-align:right" class="pos">${fmt(c.takeHome/d)}</td><td style="text-align:right" class="pos">${fmt(c.takeHome)}</td></tr>`;
+  rows += row("Employer super (12%)", fmt(c.sg/d), fmt(c.sg), "muted", "Paid to your fund, not your bank account");
+  if (c.sacrifice > 0) rows += row("Total into super", fmt((c.sg+c.sacrifice)/d), fmt(c.sg+c.sacrifice), "muted");
+  $("payslipBody").innerHTML = rows;
+}
+
+/* =====================================================
+   EVENTS
+   ===================================================== */
+["salary","hours","sacrifice"].forEach(id => $(id).addEventListener("input", render));
+["freq","residency"].forEach(id => $(id).addEventListener("change", ()=>{ 
+  $("hoursField").style.display = $("freq").value==="hourly" ? "" : "none"; render(); 
+}));
+["incSuper","help","cover","instant"].forEach(id => $(id).addEventListener("change", render));
+
+$("fySeg").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  S.fy = b.dataset.fy;
+  [...$("fySeg").children].forEach(x=>x.classList.toggle("active", x===b));
+  render();
+});
+$("famSeg").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  S.fam = b.dataset.fam;
+  [...$("famSeg").children].forEach(x=>x.classList.toggle("active", x===b));
+  render();
+});
+$("periodTabs").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  S.period = b.dataset.p;
+  [...$("periodTabs").children].forEach(x=>x.classList.toggle("active", x===b));
+  render();
+});
+
+/* =====================================================
+   LEAD CAPTURE
+   ===================================================== */
+$("termsToggle").addEventListener("click", e=>{
+  e.preventDefault();
+  $("termsFull").classList.toggle("open");
+});
+
+$("leadBtn").addEventListener("click", async ()=>{
+  const name = $("leadName").value.trim();
+  const email = $("leadEmail").value.trim();
+  const phone = $("leadPhone").value.trim();
+  const st = $("leadStatus");
+  const btn = $("leadBtn");
+  st.className = "status";
+  if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    st.textContent = "Add your name and a valid email so we know where to send it.";
+    st.classList.add("err");
+    postEmbedHeight();
+    return;
+  }
+  const c = calc();
+  const consented = $("consentAll").checked;
+  const now = new Date().toISOString();
+  const snapshot = {
+    financial_year: c.r.label,
+    residency: c.res,
+    gross: Math.round(c.base),
+    take_home: Math.round(c.takeHome),
+    total_tax: Math.round(c.total),
+    employer_super: Math.round(c.sg),
+    salary_sacrifice: Math.round(c.sacrifice),
+    has_help: c.hasHelp,
+    medicare_levy: Math.round(c.med),
+    mls: Math.round(c.mls),
+    help_repayment: Math.round(c.helpAmt),
+    effective_rate: c.effective,
+    marginal_rate: c.marginal,
+    flags: {
+      capBreach: c.cc > c.r.ccCap,
+      div293: c.div293 > 0,
+      mls: c.mls > 0
+    }
+  };
+  const payload = {
+    lead: {
+      name,
+      email,
+      phone,
+      mobile: phone || null,
+      source: LEAD_SOURCE,
+      service_interest: "individual_tax",
+      marketing_optin: consented,
+      consent: {
+        email: true,
+        sms: !!phone && consented,
+        whatsapp: false
+      },
+      calculator_snapshot: snapshot
+    },
+    touchpoint: {
+      channel: "calculator",
+      source: LEAD_SOURCE,
+      page: "/pay-calculator",
+      captured_at: now
+    },
+    source: LEAD_SOURCE,
+    calculatorSnapshot: snapshot
+  };
+  try{
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+    st.textContent = "Sending...";
+    const resp = await fetch(LEAD_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const body = await resp.json().catch(function(){ return {}; });
+    if (!resp.ok || body.success === false) throw new Error(body.message || resp.status);
+    st.textContent = "Thanks " + name + " — one of our accountants will be in touch shortly.";
+    st.classList.add("ok");
+    btn.textContent = "Get started";
+  }catch(err){
+    btn.disabled = false;
+    btn.textContent = "Get started";
+    st.textContent = "That didn't send. Try again, or call 1300 626 258.";
+    st.classList.add("err");
+  }
+  postEmbedHeight();
+});
+
+const _origRender = render;
+render = function(){
+  _origRender();
+  postEmbedHeight();
+};
+
+if (typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(postEmbedHeight).observe(document.body);
+}
+window.addEventListener("load", postEmbedHeight);
+window.addEventListener("resize", postEmbedHeight);
+
+render();
+setTimeout(postEmbedHeight, 50);
+setTimeout(postEmbedHeight, 300);
+</script>
+</body>
+</html>
