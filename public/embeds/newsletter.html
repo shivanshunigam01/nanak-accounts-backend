@@ -5,17 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nanak Newsletter Signup</title>
 <style id="nnl-styles">
-  html,body{margin:0;padding:0;background:transparent;height:auto;overflow:hidden}
+  html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:hidden}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
   .nnl{--o:#F26B21;--od:#D9550E;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
-    font-family:inherit;max-width:100%;width:100%;padding:0}
+    font-family:inherit;max-width:100%;width:100%;padding:0;display:block}
   .nnl *{box-sizing:border-box;margin:0;padding:0}
   .nnl-title{font-size:18px;font-weight:800;color:var(--navy);line-height:1.25}
   .nnl-sub{font-size:13.5px;color:#374151;margin-top:6px;line-height:1.4}
   .nnl-row{display:flex;gap:8px;margin-top:12px;align-items:stretch}
   .nnl-field{flex:1;min-width:0;padding:11px 14px;border:1.5px solid var(--line);border-radius:10px;
     font-size:16px;font-family:inherit;outline:none;background:#fff;color:#22252A;
-    /* 16px avoids iOS zoom on focus */
     line-height:1.3;-webkit-appearance:none;appearance:none}
   .nnl-field::placeholder{color:#9CA3AF}
   .nnl-field:focus{border-color:var(--o)}
@@ -36,7 +35,6 @@
   .nnl-hp{position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden}
   .nnl-btn:focus-visible,.nnl-field:focus-visible{outline:3px solid rgba(242,107,33,.4);outline-offset:2px}
 
-  /* Mobile: stack field + button, full-width tap targets */
   @media(max-width:520px){
     .nnl-title{font-size:17px}
     .nnl-sub{font-size:13px}
@@ -71,26 +69,53 @@
 
 <script>
 (function(){
+  var API_BASE = (function () {
+    try {
+      var h = location.hostname || '';
+      if (h.indexOf('connect.cavaluer.com') !== -1 || h === 'localhost' || h === '127.0.0.1') {
+        return '';
+      }
+    } catch (e) {}
+    return 'https://api.connect.cavaluer.com';
+  })();
+
+  function contentHeight(){
+    var el = document.getElementById('nnl');
+    if (!el) return 0;
+    // Measure the widget only — never document/viewport scrollHeight (that caused footer blank space).
+    var r = el.getBoundingClientRect();
+    return Math.ceil(Math.max(r.height, el.offsetHeight, el.scrollHeight)) + 2;
+  }
+
+  function applyParentFrame(h){
+    try {
+      var frames = window.parent.document.querySelectorAll('iframe');
+      frames.forEach(function(frame){
+        try {
+          if (frame.contentWindow === window) {
+            frame.style.height = h + 'px';
+            frame.removeAttribute('height');
+            frame.setAttribute('scrolling', 'no');
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
   function postHeight(){
     try {
-      var el = document.getElementById('nnl');
-      var h = Math.ceil(
-        Math.max(
-          el ? el.getBoundingClientRect().height : 0,
-          document.documentElement.scrollHeight,
-          document.body.scrollHeight
-        )
-      );
-      // Small buffer so borders/shadows aren't clipped
-      h += 4;
+      var h = contentHeight();
+      if (!h || h < 40) return;
+      applyParentFrame(h);
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'newsletter' }, '*');
+        window.parent.postMessage({ type: 'resize-iframe', height: h }, '*');
       }
     } catch (e) {}
   }
 
   function submitSubscriber(payload){
-    return fetch('/api/newsletter-subscribers', {
+    return fetch(API_BASE + '/api/newsletter-subscribers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -167,16 +192,15 @@
   btn.addEventListener('click', go);
   email.addEventListener('keydown', function(e){ if(e.key==='Enter') go(); });
 
-  // Keep host iframe height in sync with real content
   if (typeof ResizeObserver !== 'undefined') {
-    var ro = new ResizeObserver(function(){ postHeight(); });
-    ro.observe(document.getElementById('nnl'));
+    new ResizeObserver(function(){ postHeight(); }).observe(document.getElementById('nnl'));
   }
   window.addEventListener('load', postHeight);
   window.addEventListener('resize', postHeight);
   postHeight();
+  requestAnimationFrame(postHeight);
   setTimeout(postHeight, 50);
-  setTimeout(postHeight, 250);
+  setTimeout(postHeight, 200);
 })();
 </script>
 </body>
