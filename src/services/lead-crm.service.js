@@ -337,22 +337,19 @@ async function capture(raw = {}) {
     legacyRef: raw.legacyRef || undefined,
   });
 
-  if (autoOn(settings, "a2")) {
-    await routeLead(doc, settings);
-    await bumpAuto(settings, "a2");
-    const ownerName = doc.owner
-      ? (await User.findById(doc.owner).select("name").lean())?.name || "team"
-      : "unassigned";
-    doc.log.push({
-      t: `Routed to ${ownerName} - ${doc.routeWhy}`,
-      at: new Date(),
-    });
-    await logActivity(
-      "route",
-      `<b>${name || email}</b> from ${SRC_LABEL[source]} → <b>${ownerName}</b> (${doc.routeWhy})`,
-      null
-    );
-  }
+  // New leads stay unassigned — admin/owner assigns manually in Lead CRM.
+  // (Auto-routing to staff is intentionally disabled.)
+  doc.owner = null;
+  doc.routeWhy = "awaiting admin assignment";
+  doc.log.push({
+    t: "Left unassigned — admin will assign",
+    at: new Date(),
+  });
+  await logActivity(
+    "route",
+    `<b>${name || email}</b> from ${SRC_LABEL[source]} → <b>unassigned</b> (awaiting admin assignment)`,
+    null
+  );
 
   // Nurture schedule: first follow-up at +24h if a4 on and not newsletter-only cool path
   if (autoOn(settings, "a4") && source !== "newsletter") {

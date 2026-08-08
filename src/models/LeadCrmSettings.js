@@ -28,11 +28,11 @@ const automationSchema = new mongoose.Schema(
 
 const DEFAULT_AUTOS = [
   { id: "a1", on: true, ran: 0 },
-  { id: "a2", on: true, ran: 0 },
+  { id: "a2", on: false, ran: 0 },
   { id: "a3", on: true, ran: 0 },
   { id: "a4", on: true, ran: 0 },
   { id: "a5", on: false, ran: 0 },
-  { id: "a6", on: true, ran: 0 },
+  { id: "a6", on: false, ran: 0 },
 ];
 
 const leadCrmSettingsSchema = new mongoose.Schema(
