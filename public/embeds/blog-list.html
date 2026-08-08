@@ -133,9 +133,7 @@
       if (!json || !json.success) throw new Error((json && json.error) || "Failed to load blogs");
       render(json.data || [], json.pagination);
       try {
-        if (typeof window.nanakPostEmbedHeight === "function") {
-          window.nanakPostEmbedHeight();
-        }
+        /* no-op: do not resize WordPress parent */
       } catch (e) {}
     })
     .catch(function (err) {

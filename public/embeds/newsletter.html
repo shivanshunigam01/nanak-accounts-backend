@@ -8,7 +8,7 @@
   html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:auto;width:100%}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A;font-size:16px;-webkit-text-size-adjust:100%}
   .nnl{--o:#F26B21;--od:#D9550E;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
-    font-family:inherit;max-width:100%;width:100%;padding:0;display:block;box-sizing:border-box;min-height:120px}
+    font-family:inherit;max-width:100%;width:100%;padding:0;display:block;box-sizing:border-box}
   .nnl *{box-sizing:border-box;margin:0;padding:0}
   .nnl-title{font-size:18px;font-weight:800;color:var(--navy);line-height:1.25}
   .nnl-sub{font-size:13.5px;color:#374151;margin-top:6px;line-height:1.4}
@@ -102,12 +102,9 @@
     } catch (_) {}
   }
 
-  var __nnlLastH = 0;
   function postHeight(){
     try {
-      if (typeof window.nanakPostEmbedHeight === 'function') {
-        window.nanakPostEmbedHeight();
-      }
+      if (typeof window.nanakPostEmbedHeight === 'function') window.nanakPostEmbedHeight();
     } catch (e) {}
   }
 

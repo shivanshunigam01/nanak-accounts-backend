@@ -50,7 +50,7 @@ html.framed,html.framed body{
   min-height:0 !important;
   height:auto !important;
   overflow-x:auto;
-  overflow-y:auto;
+  overflow-y:visible;
   width:100%;
   max-width:none;
   min-width:1080px; /* keep 2-column desktop UI inside WP iframes */
@@ -345,12 +345,9 @@ if (window.parent && window.parent !== window) {
   document.documentElement.classList.add("framed");
 }
 
-var __payLastH = 0;
 function postEmbedHeight(){
   try {
-    if (typeof window.nanakPostEmbedHeight === "function") {
-      window.nanakPostEmbedHeight();
-    }
+    if (typeof window.nanakPostEmbedHeight === "function") window.nanakPostEmbedHeight();
   } catch (e) {}
 }
 

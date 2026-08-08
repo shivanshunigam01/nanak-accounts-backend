@@ -1,8 +1,8 @@
 /**
- * Child-side embed resize — included by every Nanak embed HTML.
- * Posts true content height to parent so iframes become visible.
- * Measures content root only (never document scrollHeight) to avoid blank-space loops.
- * No wheel forwarding.
+ * Child-side embed resize — every Nanak embed HTML includes this.
+ * Posts content height so WordPress iframes (often no height + scrolling=no) become visible.
+ * Measures content root only — never document scrollHeight (no blank-space loop).
+ * No wheel hijacking.
  */
 (function () {
   if (window.__nanakEmbedChildResize) return;
@@ -11,20 +11,19 @@
   var lastHeight = 0;
   var settleTimers = [];
 
-  function applyFramed() {
+  function applyFramedStyles() {
     if (!(window.parent && window.parent !== window)) return;
     document.documentElement.classList.add("framed");
     document.documentElement.style.height = "auto";
     document.documentElement.style.minHeight = "0";
     document.documentElement.style.width = "100%";
-    // Prefer auto so content is reachable before parent applies height.
-    document.documentElement.style.overflow = "auto";
+    document.documentElement.style.overflow = "visible";
     if (document.body) {
       document.body.classList.add("framed");
       document.body.style.height = "auto";
       document.body.style.minHeight = "0";
       document.body.style.width = "100%";
-      document.body.style.overflow = "auto";
+      document.body.style.overflow = "visible";
     }
   }
 
@@ -56,17 +55,7 @@
       el.offsetHeight || 0,
       el.scrollHeight || 0
     );
-    // Fallback: sum direct body children if root collapsed
-    if (h < 40 && document.body) {
-      var sum = 0;
-      var kids = document.body.children;
-      for (var i = 0; i < kids.length; i++) {
-        if (kids[i].tagName === "SCRIPT") continue;
-        sum += kids[i].getBoundingClientRect().height || 0;
-      }
-      h = Math.max(h, sum);
-    }
-    return Math.ceil(h) + 8;
+    return Math.max(Math.ceil(h) + 8, 80);
   }
 
   function applyParent(h) {
@@ -81,7 +70,6 @@
             frame.style.width = "100%";
             frame.style.maxWidth = "100%";
             frame.style.minHeight = "0";
-            frame.style.display = "block";
             frame.style.overflow = "hidden";
             frame.removeAttribute("height");
             frame.setAttribute("scrolling", "no");
@@ -93,6 +81,7 @@
 
   function post() {
     try {
+      applyFramedStyles();
       var h = measure();
       if (!h || h < 40) return;
       if (Math.abs(h - lastHeight) < 4) return;
@@ -112,15 +101,14 @@
 
   function scheduleSettle() {
     settleTimers.forEach(clearTimeout);
-    settleTimers = [50, 200, 600, 1200, 2500].map(function (ms) {
+    settleTimers = [50, 250, 800, 1600, 3200].map(function (ms) {
       return setTimeout(post, ms);
     });
   }
 
-  applyFramed();
+  applyFramedStyles();
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
-      applyFramed();
       post();
       scheduleSettle();
     });
@@ -129,7 +117,6 @@
     scheduleSettle();
   }
   window.addEventListener("load", function () {
-    applyFramed();
     post();
     scheduleSettle();
   });

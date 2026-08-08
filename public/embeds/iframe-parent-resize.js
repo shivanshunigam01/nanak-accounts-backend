@@ -1,7 +1,12 @@
 /**
  * Nanak iframe parent resize bridge.
- * Loaded from WordPress (or any host). Sizes Nanak iframes to content height.
- * No wheel hijacking — that caused scroll jumps.
+ *
+ * Required on WordPress once (footer or with the iframe HTML block) so embeds
+ * with no height + scrolling="no" become visible:
+ *
+ *   <script src="https://online.nanakaccountants.com.au/embeds/iframe-parent-resize.js" defer></script>
+ *
+ * Listens for nanak-embed-resize / resize-iframe. No wheel hijacking.
  */
 (function () {
   if (window.__nanakIframeParentResize) return;
@@ -16,10 +21,9 @@
         var prev = parseFloat(frame.style.height) || 0;
         if (Math.abs(prev - h) < 4) return;
         frame.dataset.nanakSized = "1";
-        frame.style.width = "100%";
+        frame.style.width = frame.style.width || "100%";
         frame.style.maxWidth = "100%";
         frame.style.display = "block";
-        frame.style.border = frame.style.border || "0";
         frame.style.overflow = "hidden";
         frame.style.minHeight = "0";
         frame.style.height = h + "px";
