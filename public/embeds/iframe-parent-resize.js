@@ -1,12 +1,8 @@
 /**
- * Nanak iframe parent resize bridge.
- *
- * Required on WordPress once (footer or with the iframe HTML block) so embeds
- * with no height + scrolling="no" become visible:
- *
+ * Nanak iframe parent resize bridge — load once on WordPress:
  *   <script src="https://online.nanakaccountants.com.au/embeds/iframe-parent-resize.js" defer></script>
  *
- * Listens for nanak-embed-resize / resize-iframe. No wheel hijacking.
+ * Always grows iframe to full content height (fixes half-cut pricing cards).
  */
 (function () {
   if (window.__nanakIframeParentResize) return;
@@ -19,7 +15,9 @@
       try {
         if (frame.contentWindow !== source) return;
         var prev = parseFloat(frame.style.height) || 0;
-        if (Math.abs(prev - h) < 4) return;
+        // Prefer growing to full content; allow shrink only if clearly smaller.
+        if (h < prev && prev - h < 80) return;
+        if (Math.abs(prev - h) < 2) return;
         frame.dataset.nanakSized = "1";
         frame.style.width = frame.style.width || "100%";
         frame.style.maxWidth = "100%";

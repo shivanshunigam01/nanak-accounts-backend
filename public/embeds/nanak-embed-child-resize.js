@@ -1,8 +1,6 @@
 /**
- * Child-side embed resize — every Nanak embed HTML includes this.
- * Posts content height so WordPress iframes (often no height + scrolling=no) become visible.
- * Measures content root only — never document scrollHeight (no blank-space loop).
- * No wheel hijacking.
+ * Child-side embed resize — posts FULL content height to WordPress parent.
+ * Uses 1px scrollHeight trick so short iframes don't report half-height.
  */
 (function () {
   if (window.__nanakEmbedChildResize) return;
@@ -14,16 +12,14 @@
   function applyFramedStyles() {
     if (!(window.parent && window.parent !== window)) return;
     document.documentElement.classList.add("framed");
-    document.documentElement.style.height = "auto";
-    document.documentElement.style.minHeight = "0";
     document.documentElement.style.width = "100%";
     document.documentElement.style.overflow = "visible";
+    document.documentElement.style.maxHeight = "none";
     if (document.body) {
       document.body.classList.add("framed");
-      document.body.style.height = "auto";
-      document.body.style.minHeight = "0";
       document.body.style.width = "100%";
       document.body.style.overflow = "visible";
+      document.body.style.maxHeight = "none";
     }
   }
 
@@ -48,14 +44,42 @@
   }
 
   function measure() {
+    var html = document.documentElement;
+    var body = document.body;
     var el = rootEl();
-    if (!el) return 0;
-    var h = Math.max(
-      el.getBoundingClientRect().height || 0,
+    if (!el || !body) return 0;
+
+    var prevHtmlH = html.style.height;
+    var prevBodyH = body.style.height;
+    var prevElH = el.style.height;
+    html.style.height = "auto";
+    html.style.minHeight = "0";
+    body.style.height = "1px";
+    body.style.minHeight = "0";
+    el.style.height = "auto";
+    el.style.minHeight = "0";
+
+    var top = el.getBoundingClientRect().top + window.scrollY;
+    var bottom = 0;
+    var nodes = el.querySelectorAll("*");
+    for (var i = 0; i < nodes.length; i++) {
+      var r = nodes[i].getBoundingClientRect();
+      if (r.width < 1 && r.height < 1) continue;
+      bottom = Math.max(bottom, r.bottom + window.scrollY - top);
+    }
+    bottom = Math.max(
+      bottom,
+      el.scrollHeight || 0,
       el.offsetHeight || 0,
-      el.scrollHeight || 0
+      el.getBoundingClientRect().height || 0,
+      body.scrollHeight || 0
     );
-    return Math.max(Math.ceil(h) + 8, 80);
+
+    body.style.height = prevBodyH;
+    html.style.height = prevHtmlH;
+    el.style.height = prevElH;
+
+    return Math.max(Math.ceil(bottom) + 24, 80);
   }
 
   function applyParent(h) {
@@ -65,14 +89,15 @@
         try {
           if (frame.contentWindow === window) {
             var prev = parseFloat(frame.style.height) || 0;
-            if (Math.abs(prev - h) < 4) return;
-            frame.style.height = h + "px";
-            frame.style.width = "100%";
-            frame.style.maxWidth = "100%";
-            frame.style.minHeight = "0";
-            frame.style.overflow = "hidden";
-            frame.removeAttribute("height");
-            frame.setAttribute("scrolling", "no");
+            if (h > prev || Math.abs(prev - h) >= 2) {
+              frame.style.height = h + "px";
+              frame.style.width = "100%";
+              frame.style.maxWidth = "100%";
+              frame.style.minHeight = "0";
+              frame.style.overflow = "hidden";
+              frame.removeAttribute("height");
+              frame.setAttribute("scrolling", "no");
+            }
           }
         } catch (_) {}
       });
@@ -84,7 +109,8 @@
       applyFramedStyles();
       var h = measure();
       if (!h || h < 40) return;
-      if (Math.abs(h - lastHeight) < 4) return;
+      if (h < lastHeight && lastHeight - h < 80) return;
+      if (Math.abs(h - lastHeight) < 2) return;
       lastHeight = h;
       applyParent(h);
       if (window.parent && window.parent !== window) {
@@ -101,7 +127,7 @@
 
   function scheduleSettle() {
     settleTimers.forEach(clearTimeout);
-    settleTimers = [50, 250, 800, 1600, 3200].map(function (ms) {
+    settleTimers = [50, 250, 600, 1200, 2000, 3500, 5000].map(function (ms) {
       return setTimeout(post, ms);
     });
   }
