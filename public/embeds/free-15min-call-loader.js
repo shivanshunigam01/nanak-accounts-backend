@@ -68,7 +68,8 @@
       'width:100%;height:100%;background:transparent;';
 
     var iframe = document.createElement('iframe');
-    iframe.src = BASE + '/embeds/free-15min-call.html';
+    /* overlay=1 keeps the dimmed backdrop inside the embed (host has no modal chrome) */
+    iframe.src = BASE + '/embeds/free-15min-call.html?overlay=1';
     iframe.title = 'Free 15 minute call with an accountant';
     iframe.setAttribute('allow', 'clipboard-write');
     iframe.style.cssText =

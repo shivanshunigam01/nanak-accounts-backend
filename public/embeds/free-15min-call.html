@@ -87,6 +87,13 @@
     background:rgba(255,255,255,.16);color:#fff;font-size:13px;cursor:pointer;line-height:1}
   .npc-x:hover{background:rgba(255,255,255,.3)}
   .npc-x:focus-visible{outline:3px solid rgba(255,255,255,.7);outline-offset:2px}
+
+  /* Host already provides the modal chrome (WP /popup iframe) — no second backdrop */
+  .npc-bg.npc-embedded{position:relative;inset:auto;background:transparent;padding:0;z-index:auto;
+    animation:none;min-height:0;align-items:stretch;justify-content:flex-start}
+  .npc-bg.npc-embedded .npc-shell{width:100%;max-height:none;animation:none;margin:0 auto}
+  .npc-bg.npc-embedded .npc-x{display:none}
+  html.npc-embedded,html.npc-embedded body{overflow:visible;height:auto}
 </style>
 </head>
 <body>
@@ -157,10 +164,31 @@
 
 <script>
 (function(){
+  /* overlay=1 → fullscreen dimmed modal (loader.js). Default = card only for host popups. */
+  var isOverlay = false;
+  try {
+    isOverlay = new URLSearchParams(window.location.search).get('overlay') === '1';
+  } catch (e) {}
+
+  var bgEl = document.getElementById('npc-bg');
+  if (!isOverlay && bgEl) {
+    document.documentElement.classList.add('npc-embedded');
+    bgEl.classList.add('npc-embedded');
+  }
+
   function notifyParent(type){
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: type, source: 'nanak-free-15min' }, '*');
+      }
+    } catch (e) {}
+  }
+
+  function notifyResize(){
+    try {
+      var h = Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 0);
+      if (h > 0 && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'nanak-free-15min' }, '*');
       }
     } catch (e) {}
   }
@@ -222,6 +250,7 @@
     document.querySelectorAll('#npc .npc-step').forEach(function(s){
       s.classList.toggle('on', +s.dataset.step === n);
     });
+    if (!isOverlay) notifyResize();
   }
 
   $('npc-profiles').querySelectorAll('.npc-chip').forEach(function(ch){
@@ -287,6 +316,7 @@
     submitLead(payload).then(function(){
       $('npc-form').style.display = 'none';
       $('npc-done').classList.add('on');
+      if (!isOverlay) notifyResize();
       /* brief success view, then tell parent to tear down + mark captured */
       setTimeout(function(){ notifyParent('npc-captured'); }, 2800);
     }).catch(function(){
@@ -299,14 +329,26 @@
     notifyParent('npc-close');
   }
 
-  $('npc-x').addEventListener('click', close);
-  $('npc-bg').addEventListener('click', function(e){
-    if (e.target === $('npc-bg')) close();
-  });
-  document.addEventListener('keydown', function(e){
-    if (e.key === 'Escape') close();
-  });
+  if (isOverlay) {
+    $('npc-x').addEventListener('click', close);
+    $('npc-bg').addEventListener('click', function(e){
+      if (e.target === $('npc-bg')) close();
+    });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') close();
+    });
+  } else {
+    notifyResize();
+    window.addEventListener('load', notifyResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      try {
+        new ResizeObserver(notifyResize).observe(document.body);
+      } catch (e) {}
+    }
+  }
 })();
 </script>
+<!-- universal WP iframe height -->
+<script src="./nanak-embed-child-resize.js" defer></script>
 </body>
 </html>
