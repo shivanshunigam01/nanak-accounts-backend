@@ -1,10 +1,6 @@
 /**
- * Child-side embed resize — include in every Nanak embed HTML:
- *   <script src="/embeds/nanak-embed-child-resize.js" defer></script>
- * Or absolute:
- *   <script src="https://online.nanakaccountants.com.au/embeds/nanak-embed-child-resize.js" defer></script>
- *
- * Optional: <body data-embed-root="nnl"> to measure a specific element id.
+ * Child-side embed resize — included by every Nanak embed HTML.
+ * Posts content height to WordPress parent; no fixed height / no iframe scroll.
  */
 (function () {
   if (window.__nanakEmbedChildResize) return;
@@ -12,6 +8,14 @@
 
   if (window.parent && window.parent !== window) {
     document.documentElement.classList.add("framed");
+    document.documentElement.style.height = "auto";
+    document.documentElement.style.minHeight = "0";
+    document.documentElement.style.overflow = "hidden";
+    if (document.body) {
+      document.body.style.height = "auto";
+      document.body.style.minHeight = "0";
+      document.body.style.overflow = "hidden";
+    }
   }
 
   function rootEl() {
@@ -50,7 +54,8 @@
             frame.style.height = h + "px";
             frame.style.width = "100%";
             frame.style.maxWidth = "100%";
-            frame.style.overflow = "visible";
+            frame.style.minHeight = "0";
+            frame.style.overflow = "hidden";
             frame.removeAttribute("height");
             frame.setAttribute("scrolling", "no");
           }

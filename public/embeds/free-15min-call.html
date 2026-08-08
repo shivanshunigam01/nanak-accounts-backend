@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nanak — Free 15-Minute Call</title>
 <style id="npc-styles">
-  html,body{margin:0;padding:0;background:transparent;height:100%;overflow:hidden}
+  html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:hidden}
+  html.framed,html.framed body{height:auto!important;min-height:0!important;overflow:hidden}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
 
   .npc{--o:#F26B21;--od:#D9550E;--os:#FEF1E8;--navy:#1B2A4A;--grey:#6B7280;--faint:#9CA3AF;
@@ -93,7 +94,7 @@
     animation:none;min-height:0;align-items:stretch;justify-content:flex-start}
   .npc-bg.npc-embedded .npc-shell{width:100%;max-height:none;animation:none;margin:0 auto}
   .npc-bg.npc-embedded .npc-x{display:none}
-  html.npc-embedded,html.npc-embedded body{overflow:visible;height:auto}
+  html.npc-embedded,html.npc-embedded body{overflow:hidden;height:auto!important;min-height:0!important}
 </style>
 </head>
 <body>

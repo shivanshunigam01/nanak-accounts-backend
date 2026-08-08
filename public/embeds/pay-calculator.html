@@ -47,10 +47,10 @@ body{
 }
 /* When framed on the marketing site: full desktop layout — never shrink to mobile. */
 html.framed,html.framed body{
-  min-height:0;
-  height:auto;
+  min-height:0 !important;
+  height:auto !important;
   overflow-x:auto;
-  overflow-y:visible;
+  overflow-y:hidden;
   width:100%;
   max-width:none;
   min-width:1080px; /* keep 2-column desktop UI inside WP iframes */

@@ -4,8 +4,8 @@
  *
  *   <script src="https://online.nanakaccountants.com.au/embeds/iframe-parent-resize.js" defer></script>
  *
- * Covers ALL Nanak iframes (pricing, checkout, newsletter, pay calculator,
- * blog sidebar, tax-check, popup, etc.). Do not set a fixed height on iframes.
+ * Do NOT set height / scrolling on Nanak iframes. This script sizes them
+ * to content with no inner scrollbar.
  */
 (function () {
   if (window.__nanakIframeParentResize) return;
@@ -27,11 +27,14 @@
   function prepareFrame(frame) {
     frame.style.width = "100%";
     frame.style.maxWidth = "100%";
-    frame.style.border = frame.style.border || "0";
-    frame.style.overflow = "visible";
+    frame.style.border = "0";
+    frame.style.overflow = "hidden";
     frame.setAttribute("scrolling", "no");
-    // Keep a soft floor until the first resize message arrives.
-    if (!frame.style.minHeight) frame.style.minHeight = "120px";
+    frame.removeAttribute("height");
+    // Soft starter only until first resize message — not a fixed final height.
+    if (!frame.dataset.nanakSized) {
+      frame.style.minHeight = "1px";
+    }
   }
 
   function apply(source, height) {
@@ -41,8 +44,12 @@
       try {
         if (frame.contentWindow === source) {
           prepareFrame(frame);
+          frame.dataset.nanakSized = "1";
           frame.style.height = h + "px";
+          frame.style.minHeight = "0";
           frame.removeAttribute("height");
+          frame.setAttribute("scrolling", "no");
+          frame.style.overflow = "hidden";
         }
       } catch (_) {}
     });
@@ -73,7 +80,6 @@
   window.addEventListener("load", prepareAll);
   setInterval(prepareAll, 2000);
 
-  // Watch for Elementor/WP injecting iframes later
   if (typeof MutationObserver !== "undefined") {
     try {
       new MutationObserver(prepareAll).observe(document.documentElement, {
