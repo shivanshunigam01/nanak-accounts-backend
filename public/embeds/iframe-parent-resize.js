@@ -1,11 +1,14 @@
 /**
- * Nanak iframe parent resize bridge — add ONCE on nanakaccountants.com.au
- * (WordPress / Elementor → Custom Code / footer):
+ * Nanak iframe parent resize bridge.
  *
+ * Paste once with any Nanak iframe (idempotent — safe on every embed block):
+ *
+ *   <iframe src="https://online.nanakaccountants.com.au/embeds/….html"
+ *     style="width:100%;border:0;display:block;overflow:hidden"
+ *     scrolling="no" loading="lazy" title="Nanak embed"></iframe>
  *   <script src="https://online.nanakaccountants.com.au/embeds/iframe-parent-resize.js" defer></script>
  *
- * Do NOT set height / scrolling on Nanak iframes. This script sizes them
- * to content with no inner scrollbar.
+ * Sizes Nanak iframes to content height. No wheel hijacking.
  */
 (function () {
   if (window.__nanakIframeParentResize) return;
@@ -24,40 +27,28 @@
     }
   }
 
-  function prepareFrame(frame) {
-    frame.style.width = "100%";
-    frame.style.maxWidth = "100%";
-    frame.style.border = "0";
-    frame.style.overflow = "hidden";
-    frame.setAttribute("scrolling", "no");
-    frame.removeAttribute("height");
-    // Soft starter only until first resize message — not a fixed final height.
-    if (!frame.dataset.nanakSized) {
-      frame.style.minHeight = "1px";
-    }
-  }
-
   function apply(source, height) {
     var h = Number(height);
     if (!h || h < 40) return;
     document.querySelectorAll("iframe").forEach(function (frame) {
       try {
-        if (frame.contentWindow === source) {
-          prepareFrame(frame);
-          frame.dataset.nanakSized = "1";
-          frame.style.height = h + "px";
-          frame.style.minHeight = "0";
-          frame.removeAttribute("height");
-          frame.setAttribute("scrolling", "no");
-          frame.style.overflow = "hidden";
+        if (frame.contentWindow !== source) return;
+        if (!isNanakFrame(frame) && !frame.dataset.nanakSized) {
+          // Still allow if message came from this frame's contentWindow.
         }
+        var prev = parseFloat(frame.style.height) || 0;
+        if (Math.abs(prev - h) < 4) return;
+        frame.dataset.nanakSized = "1";
+        frame.style.width = "100%";
+        frame.style.maxWidth = "100%";
+        frame.style.border = frame.style.border || "0";
+        frame.style.display = "block";
+        frame.style.overflow = "hidden";
+        frame.style.minHeight = "0";
+        frame.style.height = h + "px";
+        frame.removeAttribute("height");
+        frame.setAttribute("scrolling", "no");
       } catch (_) {}
-    });
-  }
-
-  function prepareAll() {
-    document.querySelectorAll("iframe").forEach(function (frame) {
-      if (isNanakFrame(frame)) prepareFrame(frame);
     });
   }
 
@@ -67,25 +58,5 @@
     if (data.type === "nanak-embed-resize" || data.type === "resize-iframe") {
       apply(e.source, data.height);
     }
-    if (data.type === "iframe-wheel" && typeof data.deltaY === "number") {
-      window.scrollBy({ top: data.deltaY, left: data.deltaX || 0, behavior: "auto" });
-    }
   });
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", prepareAll);
-  } else {
-    prepareAll();
-  }
-  window.addEventListener("load", prepareAll);
-  setInterval(prepareAll, 2000);
-
-  if (typeof MutationObserver !== "undefined") {
-    try {
-      new MutationObserver(prepareAll).observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-      });
-    } catch (_) {}
-  }
 })();

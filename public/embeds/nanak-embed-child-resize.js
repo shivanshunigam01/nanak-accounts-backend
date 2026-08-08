@@ -1,10 +1,14 @@
 /**
  * Child-side embed resize — included by every Nanak embed HTML.
- * Posts content height to WordPress parent; no fixed height / no iframe scroll.
+ * Posts true content height to parent. Measures content root only
+ * (never document scrollHeight) to avoid blank-space inflation loops.
  */
 (function () {
   if (window.__nanakEmbedChildResize) return;
   window.__nanakEmbedChildResize = true;
+
+  var lastHeight = 0;
+  var settleTimers = [];
 
   if (window.parent && window.parent !== window) {
     document.documentElement.classList.add("framed");
@@ -15,6 +19,12 @@
       document.body.style.height = "auto";
       document.body.style.minHeight = "0";
       document.body.style.overflow = "hidden";
+    } else {
+      document.addEventListener("DOMContentLoaded", function () {
+        document.body.style.height = "auto";
+        document.body.style.minHeight = "0";
+        document.body.style.overflow = "hidden";
+      });
     }
   }
 
@@ -27,22 +37,26 @@
     return (
       document.getElementById("nnl") ||
       document.getElementById("bsb") ||
+      document.getElementById("npc") ||
+      document.getElementById("nbc") ||
+      document.getElementById("ntc") ||
       document.getElementById("root") ||
       document.querySelector("main") ||
+      document.querySelector(".wrap") ||
       document.body
     );
   }
 
   function measure() {
     var el = rootEl();
+    if (!el) return 0;
+    // Content root only — never documentElement.scrollHeight (inflation loop).
     var h = Math.max(
-      el ? el.getBoundingClientRect().height : 0,
-      el ? el.scrollHeight : 0,
-      el ? el.offsetHeight : 0,
-      document.body ? document.body.scrollHeight : 0,
-      document.documentElement ? document.documentElement.scrollHeight : 0
+      el.getBoundingClientRect().height || 0,
+      el.offsetHeight || 0,
+      el.scrollHeight || 0
     );
-    return Math.ceil(h) + 12;
+    return Math.ceil(h) + 8;
   }
 
   function applyParent(h) {
@@ -51,6 +65,7 @@
       frames.forEach(function (frame) {
         try {
           if (frame.contentWindow === window) {
+            if (Math.abs((parseFloat(frame.style.height) || 0) - h) < 4) return;
             frame.style.height = h + "px";
             frame.style.width = "100%";
             frame.style.maxWidth = "100%";
@@ -68,9 +83,14 @@
     try {
       var h = measure();
       if (!h || h < 40) return;
+      if (Math.abs(h - lastHeight) < 4) return;
+      lastHeight = h;
       applyParent(h);
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: "nanak-embed-resize", height: h, source: "embed-child" }, "*");
+        window.parent.postMessage(
+          { type: "nanak-embed-resize", height: h, source: "embed-child" },
+          "*"
+        );
         window.parent.postMessage({ type: "resize-iframe", height: h }, "*");
       }
     } catch (_) {}
@@ -78,29 +98,40 @@
 
   window.nanakPostEmbedHeight = post;
 
+  function scheduleSettle() {
+    settleTimers.forEach(clearTimeout);
+    settleTimers = [50, 250, 800, 1600].map(function (ms) {
+      return setTimeout(post, ms);
+    });
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", post);
+    document.addEventListener("DOMContentLoaded", function () {
+      post();
+      scheduleSettle();
+    });
   } else {
     post();
+    scheduleSettle();
   }
-  window.addEventListener("load", post);
+  window.addEventListener("load", function () {
+    post();
+    scheduleSettle();
+  });
   window.addEventListener("resize", post);
   requestAnimationFrame(post);
-  setTimeout(post, 50);
-  setTimeout(post, 250);
-  setTimeout(post, 800);
-  setTimeout(post, 1600);
 
   if (typeof ResizeObserver !== "undefined") {
     try {
       var ro = new ResizeObserver(function () {
         post();
       });
-      ro.observe(document.body);
-      var r = rootEl();
-      if (r && r !== document.body) ro.observe(r);
+      var attach = function () {
+        var r = rootEl();
+        if (r) ro.observe(r);
+      };
+      if (document.body) attach();
+      else document.addEventListener("DOMContentLoaded", attach);
     } catch (_) {}
   }
-
-  setInterval(post, 1200);
 })();

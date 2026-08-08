@@ -345,14 +345,29 @@ if (window.parent && window.parent !== window) {
   document.documentElement.classList.add("framed");
 }
 
+var __payLastH = 0;
 function postEmbedHeight(){
   try {
-    var h = Math.ceil(Math.max(
-      document.documentElement.scrollHeight,
-      document.body.scrollHeight,
-      document.body.offsetHeight
-    )) + 12;
-    // Prefer full-width parent iframe so the calculator does not look "shrunk".
+    if (typeof window.nanakPostEmbedHeight === "function") {
+      window.nanakPostEmbedHeight();
+      return;
+    }
+    // Content only (.wrap) — never document scrollHeight (blank-space loop).
+    var wraps = document.querySelectorAll(".wrap");
+    var h = 0;
+    for (var i = 0; i < wraps.length; i++) {
+      var el = wraps[i];
+      h += Math.max(el.getBoundingClientRect().height || 0, el.offsetHeight || 0);
+    }
+    if (!h) {
+      var bodyKids = document.body ? document.body.children : [];
+      for (var j = 0; j < bodyKids.length; j++) {
+        h += bodyKids[j].getBoundingClientRect().height || 0;
+      }
+    }
+    h = Math.ceil(h) + 8;
+    if (!h || h < 40 || Math.abs(h - __payLastH) < 4) return;
+    __payLastH = h;
     try {
       var frames = window.parent.document.querySelectorAll("iframe");
       frames.forEach(function(frame){
@@ -362,6 +377,7 @@ function postEmbedHeight(){
             frame.style.maxWidth = "100%";
             frame.style.minWidth = "1080px";
             frame.style.height = h + "px";
+            frame.style.overflow = "hidden";
             frame.removeAttribute("width");
             frame.removeAttribute("height");
             frame.setAttribute("scrolling", "no");
@@ -690,7 +706,7 @@ render = function(){
 };
 
 if (typeof ResizeObserver !== "undefined") {
-  new ResizeObserver(postEmbedHeight).observe(document.body);
+  new ResizeObserver(postEmbedHeight).observe(document.querySelector(".wrap") || document.body);
 }
 window.addEventListener("load", postEmbedHeight);
 window.addEventListener("resize", postEmbedHeight);

@@ -133,10 +133,18 @@
       if (!json || !json.success) throw new Error((json && json.error) || "Failed to load blogs");
       render(json.data || [], json.pagination);
       try {
-        parent.postMessage(
-          { type: "nanak-blog-list-height", height: document.documentElement.scrollHeight, source: "nanak-blog-list" },
-          "*"
-        );
+        if (typeof window.nanakPostEmbedHeight === "function") {
+          window.nanakPostEmbedHeight();
+        } else {
+          var root = document.getElementById("nbl-root");
+          var h = root
+            ? Math.ceil(Math.max(root.getBoundingClientRect().height, root.offsetHeight || 0)) + 8
+            : 0;
+          if (h > 40) {
+            parent.postMessage({ type: "nanak-embed-resize", height: h, source: "nanak-blog-list" }, "*");
+            parent.postMessage({ type: "nanak-blog-list-height", height: h, source: "nanak-blog-list" }, "*");
+          }
+        }
       } catch (e) {}
     })
     .catch(function (err) {

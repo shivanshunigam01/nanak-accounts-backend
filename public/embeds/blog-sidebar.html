@@ -197,16 +197,25 @@
   })();
   var LEAD_SOURCE = 'blog';
 
+  var __bsbLastH = 0;
   function postHeight(){
     try {
+      if (typeof window.nanakPostEmbedHeight === 'function') {
+        window.nanakPostEmbedHeight();
+        return;
+      }
       var el = document.getElementById('bsb');
+      if (!el) return;
       var h = Math.ceil(Math.max(
-        el ? el.getBoundingClientRect().height : 0,
-        document.documentElement.scrollHeight,
-        document.body.scrollHeight
+        el.getBoundingClientRect().height || 0,
+        el.offsetHeight || 0,
+        el.scrollHeight || 0
       )) + 6;
+      if (!h || h < 40 || Math.abs(h - __bsbLastH) < 4) return;
+      __bsbLastH = h;
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'blog-sidebar' }, '*');
+        window.parent.postMessage({ type: 'resize-iframe', height: h }, '*');
       }
     } catch (e) {}
   }

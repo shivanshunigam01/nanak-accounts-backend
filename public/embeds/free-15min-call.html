@@ -185,11 +185,25 @@
     } catch (e) {}
   }
 
+  var __npcLastH = 0;
   function notifyResize(){
     try {
-      var h = Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 0);
-      if (h > 0 && window.parent && window.parent !== window) {
+      if (typeof window.nanakPostEmbedHeight === 'function') {
+        window.nanakPostEmbedHeight();
+        return;
+      }
+      var el = document.getElementById('npc') || document.getElementById('npc-bg');
+      if (!el) return;
+      var h = Math.ceil(Math.max(
+        el.getBoundingClientRect().height || 0,
+        el.offsetHeight || 0,
+        el.scrollHeight || 0
+      )) + 8;
+      if (!h || h < 40 || Math.abs(h - __npcLastH) < 4) return;
+      __npcLastH = h;
+      if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'nanak-free-15min' }, '*');
+        window.parent.postMessage({ type: 'resize-iframe', height: h }, '*');
       }
     } catch (e) {}
   }
@@ -343,7 +357,7 @@
     window.addEventListener('load', notifyResize);
     if (typeof ResizeObserver !== 'undefined') {
       try {
-        new ResizeObserver(notifyResize).observe(document.body);
+        new ResizeObserver(notifyResize).observe(document.getElementById('npc') || document.body);
       } catch (e) {}
     }
   }

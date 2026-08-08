@@ -102,10 +102,16 @@
     } catch (_) {}
   }
 
+  var __nnlLastH = 0;
   function postHeight(){
     try {
+      if (typeof window.nanakPostEmbedHeight === 'function') {
+        window.nanakPostEmbedHeight();
+        return;
+      }
       var h = contentHeight();
-      if (!h || h < 40) return;
+      if (!h || h < 40 || Math.abs(h - __nnlLastH) < 4) return;
+      __nnlLastH = h;
       applyParentFrame(h);
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'newsletter' }, '*');
