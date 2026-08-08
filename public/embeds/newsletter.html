@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nanak Newsletter Signup</title>
 <style id="nnl-styles">
-  html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:auto;width:100%}
+  html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:hidden;width:100%}
+  html.framed,html.framed body{height:auto!important;min-height:0!important;overflow:hidden;max-height:none}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A;font-size:16px;-webkit-text-size-adjust:100%}
   .nnl{--o:#F26B21;--od:#D9550E;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
     font-family:inherit;max-width:100%;width:100%;padding:0;display:block;box-sizing:border-box}
@@ -44,8 +45,8 @@
   }
 </style>
 </head>
-<body data-embed-root="nnl">
-<div class="nnl" id="nnl">
+<body data-embed-root="nnl" data-embed-tight="1">
+<div class="nnl" id="nnl" data-embed-tight="1">
   <div class="nnl-title">Subscribe to our newsletter</div>
   <div class="nnl-sub">Get tax tips, business insights, and updates delivered to your inbox.</div>
 
@@ -82,7 +83,7 @@
   function contentHeight(){
     var el = document.getElementById('nnl');
     if (!el) return 0;
-    // Measure the widget only — never document/viewport scrollHeight (that caused footer blank space).
+    // Widget only — tiny pad, no blank footer gap.
     var r = el.getBoundingClientRect();
     return Math.ceil(Math.max(r.height, el.offsetHeight, el.scrollHeight)) + 2;
   }
@@ -94,6 +95,9 @@
         try {
           if (frame.contentWindow === window) {
             frame.style.height = h + 'px';
+            frame.style.minHeight = '0';
+            frame.style.maxHeight = 'none';
+            frame.style.overflow = 'hidden';
             frame.removeAttribute('height');
             frame.setAttribute('scrolling', 'no');
           }
@@ -104,7 +108,13 @@
 
   function postHeight(){
     try {
-      if (typeof window.nanakPostEmbedHeight === 'function') window.nanakPostEmbedHeight();
+      var h = contentHeight();
+      if (!h || h < 40) return;
+      applyParentFrame(h);
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'newsletter' }, '*');
+        window.parent.postMessage({ type: 'resize-iframe', height: h }, '*');
+      }
     } catch (e) {}
   }
 

@@ -56,6 +56,19 @@
     el.style.setProperty("min-height", "0", "important");
     el.style.setProperty("max-height", "none", "important");
 
+    // Compact footer widgets (newsletter, tax-check) — hug content, no extra blank gap.
+    var compact =
+      el.id === "nnl" ||
+      el.id === "ntc" ||
+      el.id === "bsb" ||
+      (el.getAttribute && el.getAttribute("data-embed-tight") === "1");
+
+    if (compact) {
+      var r = el.getBoundingClientRect();
+      var tight = Math.max(r.height || 0, el.offsetHeight || 0, el.scrollHeight || 0);
+      return Math.min(Math.max(Math.ceil(tight) + 2, 40), 10000);
+    }
+
     var fromKids = 0;
     var kids = el.children;
     for (var i = 0; i < kids.length; i++) {
