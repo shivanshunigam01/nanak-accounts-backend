@@ -37,13 +37,13 @@
       if (el) return el;
     }
     return (
+      document.getElementById("pay-embed") ||
       document.getElementById("nnl") ||
       document.getElementById("bsb") ||
       document.getElementById("npc") ||
       document.getElementById("nbc") ||
       document.getElementById("ntc") ||
       document.getElementById("nbl-root") ||
-      document.querySelector(".wrap") ||
       document.querySelector("main") ||
       document.body
     );
@@ -60,7 +60,8 @@
     var kids = el.children;
     for (var i = 0; i < kids.length; i++) {
       var child = kids[i];
-      fromKids = Math.max(fromKids, child.offsetTop + child.offsetHeight);
+      if (!child || child.tagName === "SCRIPT" || child.tagName === "STYLE") continue;
+      fromKids = Math.max(fromKids, (child.offsetTop || 0) + (child.offsetHeight || 0));
     }
 
     var h = Math.max(fromKids, el.scrollHeight || 0, el.offsetHeight || 0);

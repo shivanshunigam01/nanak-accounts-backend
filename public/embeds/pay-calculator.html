@@ -184,7 +184,8 @@ footer a:hover{color:var(--orange)}
 }
 </style>
 </head>
-<body>
+<body data-embed-root="pay-embed">
+<div id="pay-embed">
 
 <header>
   <div class="wrap">
@@ -325,6 +326,8 @@ footer a:hover{color:var(--orange)}
     </footer>
   </div>
 </main>
+
+</div><!-- #pay-embed -->
 
 <script>
 /* =====================================================
@@ -665,7 +668,7 @@ render = function(){
 };
 
 if (typeof ResizeObserver !== "undefined") {
-  new ResizeObserver(postEmbedHeight).observe(document.querySelector(".wrap") || document.body);
+  new ResizeObserver(postEmbedHeight).observe(document.getElementById("pay-embed") || document.body);
 }
 window.addEventListener("load", postEmbedHeight);
 window.addEventListener("resize", postEmbedHeight);
