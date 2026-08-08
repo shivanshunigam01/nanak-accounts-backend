@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Talk to a registered tax agent | Nanak</title>
+<style>
+  :root{
+    --navy:#1B2A4A;
+    --navy-2:#0F2749;
+    --orange:#F26B21;
+    --orange-deep:#D9550E;
+    --muted:#6B7280;
+    --line:#E5E7EB;
+    --bg:#fff;
+    --soft:#F8FAFC;
+  }
+  html,body{margin:0;padding:0;background:transparent;height:auto;overflow:hidden}
+  body{font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Arial,sans-serif;color:var(--navy-2);-webkit-font-smoothing:antialiased}
+  .bsb{
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px 20px 18px;
+    max-width:420px;
+    width:100%;
+    box-sizing:border-box;
+    margin:0 auto;
+  }
+  .bsb *{box-sizing:border-box}
+  .bsb-title{font-size:20px;font-weight:800;color:var(--navy);line-height:1.25;margin:0 0 6px;letter-spacing:-0.01em}
+  .bsb-sub{font-size:13.5px;color:var(--muted);line-height:1.45;margin:0 0 18px}
+  .bsb-field{margin-bottom:12px}
+  .bsb-field label{display:block;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:5px}
+  .bsb-field label .req{color:#DC2626;margin-left:1px}
+  .bsb-field input,
+  .bsb-field select,
+  .bsb-field textarea{
+    width:100%;
+    padding:11px 13px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    font-size:16px; /* avoid iOS zoom */
+    font-family:inherit;
+    color:var(--navy-2);
+    background:#fff;
+    outline:none;
+    appearance:none;-webkit-appearance:none;
+  }
+  .bsb-field select{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236B7280' d='M1.4 0L6 4.6 10.6 0 12 1.4 6 7.4 0 1.4z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+    padding-right:36px;
+    color:var(--muted);
+  }
+  .bsb-field select.has-value{color:var(--navy-2)}
+  .bsb-field textarea{min-height:88px;resize:vertical;line-height:1.4}
+  .bsb-field input::placeholder,
+  .bsb-field textarea::placeholder{color:#9CA3AF}
+  .bsb-field input:focus,
+  .bsb-field select:focus,
+  .bsb-field textarea:focus{border-color:var(--orange);outline:2px solid rgba(242,107,33,.25);outline-offset:0}
+  .bsb-field input.bad,
+  .bsb-field select.bad,
+  .bsb-field textarea.bad{border-color:#DC2626}
+  .bsb-btn{
+    width:100%;
+    margin-top:4px;
+    padding:13px 16px;
+    border:0;
+    border-radius:11px;
+    background:var(--orange);
+    color:#fff;
+    font-size:15px;
+    font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .bsb-btn:hover{background:var(--orange-deep)}
+  .bsb-btn:disabled{opacity:.65;cursor:default}
+  .bsb-note{font-size:11.5px;color:var(--muted);text-align:center;margin:10px 0 0;line-height:1.4}
+  .bsb-status{font-size:13px;margin-top:10px;min-height:0;text-align:center;line-height:1.4}
+  .bsb-status.ok{color:#0E7C4A}
+  .bsb-status.err{color:#DC2626}
+  .bsb-trust{
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .bsb-trust div{
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--navy);
+    line-height:1.35;
+  }
+  .bsb-trust i{
+    flex:0 0 16px;
+    width:16px;height:16px;
+    margin-top:1px;
+    color:var(--orange);
+    font-style:normal;
+    font-size:13px;
+    line-height:16px;
+    text-align:center;
+  }
+  .bsb-done{display:none;text-align:center;padding:12px 4px 4px}
+  .bsb-done.on{display:block}
+  .bsb-done .tick{
+    width:40px;height:40px;border-radius:50%;
+    background:#E8F4EE;color:#0E7C4A;
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;margin:0 auto 12px;font-weight:700;
+  }
+  .bsb-done b{display:block;font-size:16px;color:var(--navy);margin-bottom:4px}
+  .bsb-done span{font-size:13.5px;color:var(--muted);line-height:1.45}
+  .bsb-hp{position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden}
+  @media(max-width:380px){
+    .bsb{padding:18px 14px 14px;border-radius:12px}
+    .bsb-title{font-size:18px}
+  }
+</style>
+</head>
+<body>
+<div class="bsb" id="bsb">
+  <div id="bsb-form-wrap">
+    <h2 class="bsb-title">Talk to a registered tax agent</h2>
+    <p class="bsb-sub">Tell us what you need. We usually reply the same business day.</p>
+
+    <form id="bsb-form" novalidate>
+      <div class="bsb-field">
+        <label for="bsb-name">Full Name<span class="req">*</span></label>
+        <input id="bsb-name" type="text" name="name" placeholder="John Smith" autocomplete="name" required>
+      </div>
+      <div class="bsb-field">
+        <label for="bsb-email">Email Address<span class="req">*</span></label>
+        <input id="bsb-email" type="email" name="email" placeholder="john@example.com" autocomplete="email" inputmode="email" required>
+      </div>
+      <div class="bsb-field">
+        <label for="bsb-mobile">Mobile<span class="req">*</span></label>
+        <input id="bsb-mobile" type="tel" name="mobile" placeholder="0400 000 000" autocomplete="tel" inputmode="tel" required>
+      </div>
+      <div class="bsb-field">
+        <label for="bsb-service">Service Interested In<span class="req">*</span></label>
+        <select id="bsb-service" name="service" required>
+          <option value="" selected disabled>Please select...</option>
+          <option value="individual_tax">Individual tax return</option>
+          <option value="business_tax">Business tax</option>
+          <option value="business_advisory">Business advisory</option>
+          <option value="property_tax">Property &amp; CGT</option>
+          <option value="smsf">SMSF</option>
+        </select>
+      </div>
+      <div class="bsb-field">
+        <label for="bsb-msg">Message</label>
+        <textarea id="bsb-msg" name="message" placeholder="Tell us about your needs..." rows="3"></textarea>
+      </div>
+
+      <input class="bsb-hp" id="bsb-website" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+      <button class="bsb-btn" id="bsb-btn" type="submit">Send my enquiry</button>
+      <p class="bsb-note">We call or email once about this enquiry. No spam, unsubscribe anytime.</p>
+      <div class="bsb-status" id="bsb-status" role="status"></div>
+    </form>
+  </div>
+
+  <div class="bsb-done" id="bsb-done">
+    <div class="tick">&#10003;</div>
+    <b>Enquiry sent</b>
+    <span>Thanks — one of our accountants will get back to you shortly.</span>
+  </div>
+
+  <div class="bsb-trust">
+    <div><i>✓</i><span>Registered Tax Agent 26113345</span></div>
+    <div><i>★</i><span>1,000+ five-star Google reviews</span></div>
+    <div><i>✓</i><span>8+ offices Australia-wide</span></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var LEAD_API = '/api/leads';
+  var LEAD_SOURCE = 'blog';
+
+  function postHeight(){
+    try {
+      var el = document.getElementById('bsb');
+      var h = Math.ceil(Math.max(
+        el ? el.getBoundingClientRect().height : 0,
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight
+      )) + 6;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'blog-sidebar' }, '*');
+      }
+    } catch (e) {}
+  }
+
+  function parentPage(){
+    try {
+      if (document.referrer) return new URL(document.referrer).pathname || '/blog';
+    } catch (e) {}
+    return '/blog';
+  }
+
+  function parentTitle(){
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.get('title')) return q.get('title');
+      if (document.referrer) return document.referrer;
+    } catch (e) {}
+    return null;
+  }
+
+  var form = document.getElementById('bsb-form');
+  var btn = document.getElementById('bsb-btn');
+  var status = document.getElementById('bsb-status');
+  var svc = document.getElementById('bsb-service');
+
+  svc.addEventListener('change', function(){
+    svc.classList.toggle('has-value', !!svc.value);
+  });
+
+  function mark(el, bad){
+    if (bad) el.classList.add('bad'); else el.classList.remove('bad');
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    status.className = 'bsb-status';
+    status.textContent = '';
+
+    // Honeypot
+    var hp = document.getElementById('bsb-website');
+    if (hp && hp.value) {
+      document.getElementById('bsb-form-wrap').style.display = 'none';
+      document.getElementById('bsb-done').classList.add('on');
+      postHeight();
+      return;
+    }
+
+    var name = document.getElementById('bsb-name');
+    var email = document.getElementById('bsb-email');
+    var mobile = document.getElementById('bsb-mobile');
+    var message = document.getElementById('bsb-msg');
+
+    var n = name.value.trim();
+    var em = email.value.trim();
+    var mo = mobile.value.trim();
+    var service = svc.value;
+    var msg = message.value.trim();
+
+    var bad = false;
+    mark(name, !n); if (!n) bad = true;
+    mark(email, !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) bad = true;
+    var digits = mo.replace(/[^\d]/g, '');
+    mark(mobile, digits.length < 8); if (digits.length < 8) bad = true;
+    mark(svc, !service); if (!service) bad = true;
+
+    if (bad) {
+      status.textContent = 'Please fill in the required fields.';
+      status.classList.add('err');
+      postHeight();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    var payload = {
+      lead: {
+        name: n,
+        email: em,
+        mobile: mo,
+        phone: mo,
+        source: LEAD_SOURCE,
+        service_interest: service,
+        callback_requested: true,
+        marketing_optin: true,
+        consent: { email: true, sms: true, whatsapp: false },
+        message: msg || null,
+        admin_notes: msg || null,
+        lead_score: 72
+      },
+      touchpoint: {
+        channel: 'blog_sidebar',
+        source: LEAD_SOURCE,
+        page: parentPage(),
+        article_title: parentTitle(),
+        captured_at: new Date().toISOString()
+      },
+      source: LEAD_SOURCE
+    };
+
+    fetch(LEAD_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(res){
+      return res.json().then(function(body){
+        if (!res.ok || body.success === false) {
+          throw new Error((body && body.message) || 'Submission failed');
+        }
+        return body;
+      });
+    }).then(function(){
+      document.getElementById('bsb-form-wrap').style.display = 'none';
+      document.getElementById('bsb-done').classList.add('on');
+      postHeight();
+    }).catch(function(){
+      btn.disabled = false;
+      btn.textContent = 'Send my enquiry';
+      status.textContent = "That didn't send. Try again, or call 1300 626 258.";
+      status.classList.add('err');
+      postHeight();
+    });
+  });
+
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(postHeight).observe(document.getElementById('bsb'));
+  }
+  window.addEventListener('load', postHeight);
+  window.addEventListener('resize', postHeight);
+  postHeight();
+  setTimeout(postHeight, 50);
+  setTimeout(postHeight, 250);
+})();
+</script>
+</body>
+</html>
