@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Us | Nanak Accountants</title>
+<style>
+  :root{
+    --navy:#1B2A4A;
+    --text:#101B2D;
+    --muted:#6B7280;
+    --line:#E5E7EB;
+    --orange:#F26B21;
+    --orange-deep:#D9550E;
+    --soft:#FEF1E8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    margin:0;padding:0;background:transparent;
+    height:auto!important;min-height:0!important;
+    overflow:hidden;width:100%;
+    font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Arial,sans-serif;
+    color:var(--text);-webkit-font-smoothing:antialiased;
+  }
+  .cu{
+    width:100%;max-width:720px;margin:0 auto;
+    background:#fff;
+    border:1px solid var(--line);
+    border-top:4px solid var(--orange);
+    border-radius:16px;
+    box-shadow:0 12px 40px rgba(27,42,74,.08);
+    padding:28px 28px 24px;
+  }
+  .cu-badge{
+    display:inline-block;
+    font-size:12px;font-weight:600;color:var(--muted);
+    border:1px solid #F8D4B8;background:var(--soft);
+    border-radius:999px;padding:6px 12px;margin-bottom:14px;
+  }
+  .cu-title{
+    font-size:clamp(26px,5vw,34px);font-weight:800;color:#111;
+    letter-spacing:-0.02em;line-height:1.15;margin:0 0 8px;
+  }
+  .cu-sub{font-size:14.5px;color:var(--muted);line-height:1.45;margin:0 0 22px}
+  .cu-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+  .cu-field{display:flex;flex-direction:column;gap:6px}
+  .cu-field.full{grid-column:1 / -1}
+  .cu-field label{font-size:13.5px;font-weight:700;color:#111}
+  .cu-field label .req{color:#111;margin-left:2px}
+  .cu-field input,
+  .cu-field select,
+  .cu-field textarea{
+    width:100%;
+    padding:12px 14px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    font-size:16px;
+    font-family:inherit;
+    color:var(--text);
+    background:#fff;
+    outline:none;
+    appearance:none;-webkit-appearance:none;
+  }
+  .cu-field select{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236B7280' d='M1.4 0L6 4.6 10.6 0 12 1.4 6 7.4 0 1.4z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+    padding-right:36px;
+    color:var(--muted);
+  }
+  .cu-field select.has-value{color:var(--text)}
+  .cu-field textarea{min-height:110px;resize:vertical;line-height:1.45}
+  .cu-field input::placeholder,
+  .cu-field textarea::placeholder{color:#9CA3AF}
+  .cu-field input:focus,
+  .cu-field select:focus,
+  .cu-field textarea:focus{
+    border-color:var(--orange);
+    outline:2px solid rgba(242,107,33,.22);
+    outline-offset:0;
+  }
+  .cu-field input.bad,
+  .cu-field select.bad,
+  .cu-field textarea.bad{border-color:#DC2626}
+  .cu-foot{
+    margin-top:18px;
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+  }
+  .cu-secure{
+    display:flex;align-items:center;gap:8px;
+    font-size:11.5px;color:var(--muted);line-height:1.35;
+  }
+  .cu-secure svg{flex:none}
+  .cu-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-width:200px;padding:13px 28px;
+    border:0;border-radius:999px;
+    background:var(--orange);color:#fff;
+    font-size:15px;font-weight:700;font-family:inherit;
+    cursor:pointer;transition:background .15s;
+  }
+  .cu-btn:hover{background:var(--orange-deep)}
+  .cu-btn:disabled{opacity:.65;cursor:default}
+  .cu-btn svg{width:16px;height:16px;fill:currentColor}
+  .cu-status{font-size:13px;text-align:center;min-height:0;line-height:1.4}
+  .cu-status.ok{color:#0E7C4A}
+  .cu-status.err{color:#DC2626}
+  .cu-done{display:none;text-align:center;padding:18px 8px 8px}
+  .cu-done.on{display:block}
+  .cu-done .tick{
+    width:48px;height:48px;border-radius:50%;
+    background:#E8F4EE;color:#0E7C4A;
+    display:flex;align-items:center;justify-content:center;
+    font-size:22px;font-weight:700;margin:0 auto 14px;
+  }
+  .cu-done h3{font-size:20px;font-weight:800;color:var(--navy);margin:0 0 6px}
+  .cu-done p{font-size:14px;color:var(--muted);line-height:1.45;margin:0}
+  .cu-hp{position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden}
+  @media(max-width:640px){
+    .cu{padding:22px 16px 18px;border-radius:14px}
+    .cu-grid{grid-template-columns:1fr;gap:12px}
+    .cu-title{font-size:24px}
+    .cu-btn{width:100%}
+  }
+</style>
+</head>
+<body data-embed-root="cu">
+<div class="cu" id="cu">
+  <div id="cu-form-wrap">
+    <div class="cu-badge">Send us a message</div>
+    <h1 class="cu-title">Let's Discuss Your Needs</h1>
+    <p class="cu-sub">Fill out the form below and we'll get back to you within 24 hours.</p>
+
+    <form id="cu-form" novalidate>
+      <div class="cu-grid">
+        <div class="cu-field">
+          <label for="cu-name">Full Name<span class="req">*</span></label>
+          <input id="cu-name" name="name" type="text" autocomplete="name" placeholder="John Smith" required>
+        </div>
+        <div class="cu-field">
+          <label for="cu-phone">Phone Number<span class="req">*</span></label>
+          <input id="cu-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="0400 000 000" required>
+        </div>
+        <div class="cu-field full">
+          <label for="cu-email">Email Address<span class="req">*</span></label>
+          <input id="cu-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="John@example.com" required>
+        </div>
+        <div class="cu-field full">
+          <label for="cu-service">Service Interested In<span class="req">*</span></label>
+          <select id="cu-service" name="service" required>
+            <option value="" selected disabled>Select a service...</option>
+            <option value="individual_tax">Individual tax return</option>
+            <option value="business_tax">Business tax</option>
+            <option value="business_advisory">Business advisory</option>
+            <option value="property_tax">Property &amp; CGT</option>
+            <option value="smsf">SMSF</option>
+          </select>
+        </div>
+        <div class="cu-field full">
+          <label for="cu-message">Message</label>
+          <textarea id="cu-message" name="message" placeholder="Tell us about your needs..." rows="4"></textarea>
+        </div>
+      </div>
+
+      <input class="cu-hp" id="cu-website" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+      <div class="cu-foot">
+        <div class="cu-secure" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" stroke="#6B7280" stroke-width="1.6"/>
+            <path d="M9.5 12.2l1.8 1.8 3.4-3.6" stroke="#6B7280" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Your details are secure. We never share your information.</span>
+        </div>
+        <button class="cu-btn" id="cu-btn" type="submit">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 11.2L20.2 3.5c.7-.3 1.4.4 1.1 1.1L13.6 21.4c-.3.7-1.3.6-1.5-.2l-1.8-6.3-6.3-1.8c-.8-.2-.9-1.2-.2-1.5z"/></svg>
+          Send Message
+        </button>
+        <div class="cu-status" id="cu-status" role="status"></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="cu-done" id="cu-done">
+    <div class="tick">&#10003;</div>
+    <h3>Message sent</h3>
+    <p>Thanks — one of our accountants will get back to you within 24 hours.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var LEAD_API = (function () {
+    try {
+      var h = location.hostname || "";
+      if (h.indexOf("connect.cavaluer.com") !== -1 || h === "localhost" || h === "127.0.0.1") {
+        return "/api/leads";
+      }
+    } catch (e) {}
+    return "https://api.connect.cavaluer.com/api/leads";
+  })();
+  var LEAD_SOURCE = "contact_us";
+
+  function postHeight() {
+    try {
+      var el = document.getElementById("cu");
+      if (!el) return;
+      var h = Math.ceil(Math.max(el.getBoundingClientRect().height, el.offsetHeight, el.scrollHeight)) + 8;
+      if (h > 900) h = 900;
+      if (h < 80) return;
+      try {
+        window.parent.document.querySelectorAll("iframe").forEach(function (frame) {
+          try {
+            if (frame.contentWindow === window) {
+              frame.style.height = h + "px";
+              frame.style.minHeight = "0";
+              frame.style.maxHeight = "none";
+              frame.style.overflow = "hidden";
+              frame.removeAttribute("height");
+              frame.setAttribute("scrolling", "no");
+            }
+          } catch (_) {}
+        });
+      } catch (_) {}
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: "nanak-embed-resize",
+          height: h,
+          source: "contact_us",
+          compact: true,
+          maxHeight: 900
+        }, "*");
+      }
+    } catch (e) {}
+  }
+
+  function parentPage() {
+    try {
+      if (document.referrer) return new URL(document.referrer).pathname || "/contact";
+    } catch (e) {}
+    return "/contact";
+  }
+
+  function mark(el, bad) {
+    if (bad) el.classList.add("bad");
+    else el.classList.remove("bad");
+  }
+
+  var form = document.getElementById("cu-form");
+  var btn = document.getElementById("cu-btn");
+  var status = document.getElementById("cu-status");
+  var svc = document.getElementById("cu-service");
+
+  svc.addEventListener("change", function () {
+    svc.classList.toggle("has-value", !!svc.value);
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    status.className = "cu-status";
+    status.textContent = "";
+
+    var hp = document.getElementById("cu-website");
+    if (hp && hp.value) {
+      document.getElementById("cu-form-wrap").style.display = "none";
+      document.getElementById("cu-done").classList.add("on");
+      postHeight();
+      return;
+    }
+
+    var nameEl = document.getElementById("cu-name");
+    var emailEl = document.getElementById("cu-email");
+    var phoneEl = document.getElementById("cu-phone");
+    var msgEl = document.getElementById("cu-message");
+
+    var name = nameEl.value.trim();
+    var email = emailEl.value.trim();
+    var phone = phoneEl.value.trim();
+    var service = svc.value;
+    var message = msgEl.value.trim();
+    var digits = phone.replace(/[^\d]/g, "");
+
+    var bad = false;
+    mark(nameEl, !name); if (!name) bad = true;
+    mark(emailEl, !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) bad = true;
+    mark(phoneEl, digits.length < 8); if (digits.length < 8) bad = true;
+    mark(svc, !service); if (!service) bad = true;
+
+    if (bad) {
+      status.textContent = "Please fill in the required fields.";
+      status.classList.add("err");
+      postHeight();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+
+    var payload = {
+      lead: {
+        name: name,
+        email: email,
+        mobile: phone,
+        phone: phone,
+        source: LEAD_SOURCE,
+        service_interest: service,
+        callback_requested: true,
+        marketing_optin: true,
+        consent: { email: true, sms: true, whatsapp: false },
+        message: message || null,
+        admin_notes: message || null,
+        lead_score: 78
+      },
+      touchpoint: {
+        channel: "contact_us",
+        source: LEAD_SOURCE,
+        page: parentPage(),
+        article_title: null,
+        captured_at: new Date().toISOString()
+      },
+      source: LEAD_SOURCE
+    };
+
+    fetch(LEAD_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        return res.json().then(function (body) {
+          if (!res.ok || body.success === false) {
+            throw new Error((body && body.message) || "Submission failed");
+          }
+          return body;
+        });
+      })
+      .then(function () {
+        document.getElementById("cu-form-wrap").style.display = "none";
+        document.getElementById("cu-done").classList.add("on");
+        postHeight();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 11.2L20.2 3.5c.7-.3 1.4.4 1.1 1.1L13.6 21.4c-.3.7-1.3.6-1.5-.2l-1.8-6.3-6.3-1.8c-.8-.2-.9-1.2-.2-1.5z"/></svg> Send Message';
+        status.textContent = "That didn't send. Try again, or call 1300 626 258.";
+        status.classList.add("err");
+        postHeight();
+      });
+  });
+
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(postHeight).observe(document.getElementById("cu"));
+  }
+  window.addEventListener("load", postHeight);
+  window.addEventListener("resize", postHeight);
+  postHeight();
+  setTimeout(postHeight, 50);
+  setTimeout(postHeight, 250);
+})();
+</script>
+<script src="./nanak-embed-child-resize.js" defer></script>
+</body>
+</html>

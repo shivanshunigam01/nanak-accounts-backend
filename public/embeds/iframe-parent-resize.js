@@ -23,6 +23,7 @@
     if (/newsletter/i.test(src)) return 260;
     if (/tax-check\.html|\/tax-check/i.test(src)) return 320;
     if (/blog-sidebar/i.test(src)) return 720;
+    if (/contact-us|\/contact\b/i.test(src)) return 900;
     return 0;
   }
 

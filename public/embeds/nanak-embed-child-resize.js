@@ -39,6 +39,7 @@
     return (
       document.getElementById("pay-embed") ||
       document.getElementById("nnl") ||
+      document.getElementById("cu") ||
       document.getElementById("bsb") ||
       document.getElementById("npc") ||
       document.getElementById("nbc") ||
@@ -61,12 +62,14 @@
       el.id === "nnl" ||
       el.id === "ntc" ||
       el.id === "bsb" ||
+      el.id === "cu" ||
       (el.getAttribute && el.getAttribute("data-embed-tight") === "1");
 
     if (compact) {
       var r = el.getBoundingClientRect();
       var tight = Math.max(r.height || 0, el.offsetHeight || 0, el.scrollHeight || 0);
-      return Math.min(Math.max(Math.ceil(tight) + 2, 40), 10000);
+      var pad = el.id === "cu" || el.id === "bsb" ? 8 : 2;
+      return Math.min(Math.max(Math.ceil(tight) + pad, 40), 10000);
     }
 
     var fromKids = 0;
@@ -103,7 +106,8 @@
         };
         if (compact) {
           payload.compact = true;
-          payload.maxHeight = el.id === "bsb" ? 720 : 260;
+          payload.maxHeight =
+            el.id === "bsb" ? 720 : el.id === "cu" ? 900 : 260;
           if (h > payload.maxHeight) {
             h = payload.maxHeight;
             payload.height = h;
