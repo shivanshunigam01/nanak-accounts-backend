@@ -45,15 +45,15 @@ body{
   -webkit-font-smoothing:antialiased;
   min-height:100vh;
 }
-/* When framed on the marketing site: full desktop layout — never shrink to mobile. */
+/* When framed on the marketing site: responsive — stack on phone/tablet, 2-col on desktop. */
 html.framed,html.framed body{
   min-height:0 !important;
   height:auto !important;
-  overflow-x:auto;
-  overflow-y:visible;
+  overflow-x:hidden;
+  overflow-y:hidden;
   width:100%;
-  max-width:none;
-  min-width:1080px; /* keep 2-column desktop UI inside WP iframes */
+  max-width:100%;
+  min-width:0;
   font-size:16px;
   background:#F4F7FB;
 }
@@ -65,17 +65,30 @@ html.framed .wrap{
 }
 html.framed header{padding:28px 0 20px}
 html.framed h1{
-  font-size:42px; /* fixed — vw would shrink with the iframe */
+  font-size:clamp(26px,6vw,42px);
   max-width:none;
 }
-html.framed .header-note{font-size:16px;max-width:720px}
-html.framed .takehome .big{font-size:52px}
+html.framed .header-note{font-size:15px;max-width:720px}
+html.framed .takehome .big{font-size:clamp(36px,8vw,52px)}
 html.framed .grid{
   grid-template-columns:400px minmax(0,1fr);
   gap:26px;
 }
 html.framed .panel{padding:26px}
 html.framed footer{padding:16px 0 24px}
+@media(max-width:920px){
+  html.framed .grid{grid-template-columns:1fr;gap:18px}
+  html.framed header{padding:20px 0 14px}
+  html.framed .panel{padding:18px}
+  html.framed .wrap{padding:0 12px}
+  html.framed .trust-row{gap:12px;font-size:12.5px}
+  html.framed .lead-grid{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  html.framed h1{font-size:24px}
+  html.framed .eyebrow{font-size:11px;padding:6px 12px}
+  html.framed .seg button{font-size:13px;padding:8px 4px}
+}
 h1,h2,h3{font-family:'Poppins',sans-serif}
 .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
 
@@ -91,7 +104,7 @@ h1 .hl{color:var(--orange)}
 /* ---------- layout ---------- */
 main{padding:14px 0 10px}
 .grid{display:grid;grid-template-columns:400px 1fr;gap:26px;align-items:start}
-/* Solo page (not iframe): stack on narrow screens. Framed keeps desktop via html.framed rules. */
+/* Solo page (not iframe): stack on narrow screens. */
 @media(max-width:920px){
   html:not(.framed) .grid{grid-template-columns:1fr}
 }

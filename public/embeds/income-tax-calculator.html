@@ -669,18 +669,31 @@
 
 html,body{margin:0;padding:0}
 html.framed,html.framed body{
-  min-height:0!important;height:auto!important;overflow-x:auto;overflow-y:hidden;
-  width:100%;max-width:none;min-width:1080px;background:#F4F7FB;
+  min-height:0!important;height:auto!important;overflow-x:hidden;overflow-y:hidden;
+  width:100%;max-width:100%;min-width:0;background:#F4F7FB;
 }
-html.framed .itc{min-height:0!important;height:auto!important}
+html.framed .itc{min-height:0!important;height:auto!important;width:100%;max-width:100%}
 html.framed .itc .wrap{max-width:none;width:100%;padding:0 16px;box-sizing:border-box}
 html.framed .itc header{padding:28px 0 20px}
-html.framed .itc h1{font-size:42px;max-width:none}
+html.framed .itc h1{font-size:clamp(26px,6vw,42px);max-width:none}
+html.framed .itc .header-note{font-size:15px}
+html.framed .itc .headline .big{font-size:clamp(36px,8vw,52px)}
 html.framed .itc .grid{grid-template-columns:400px minmax(0,1fr);gap:26px}
 html.framed .itc .panel{padding:26px}
 html.framed .itc footer{padding:16px 0 24px}
 @media(max-width:920px){
+  html.framed .itc .grid{grid-template-columns:1fr;gap:18px}
+  html.framed .itc header{padding:20px 0 14px}
+  html.framed .itc .panel{padding:18px}
+  html.framed .itc .wrap{padding:0 12px}
+  html.framed .itc .trust-row{gap:12px;font-size:12.5px}
+  html.framed .itc .lead-grid{grid-template-columns:1fr}
   html:not(.framed) .itc .grid{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  html.framed .itc h1{font-size:24px}
+  html.framed .itc .eyebrow{font-size:11px;padding:6px 12px}
+  html.framed .itc .seg button{font-size:13px;padding:8px 4px}
 }
 
 </style>

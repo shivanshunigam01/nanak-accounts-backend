@@ -22,6 +22,7 @@
         frame.dataset.nanakSized = "1";
         frame.style.setProperty("width", "100%", "important");
         frame.style.setProperty("max-width", "100%", "important");
+        frame.style.setProperty("min-width", "0", "important");
         frame.style.setProperty("display", "block", "important");
         frame.style.setProperty("overflow", "hidden", "important");
         frame.style.setProperty("min-height", "0", "important");
