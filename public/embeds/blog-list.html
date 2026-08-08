@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nanak Blog List</title>
 <style>
-  html,body{margin:0;padding:0;background:transparent}
+  html,body{margin:0;padding:0;background:transparent;height:auto;min-height:0;overflow:auto;width:100%}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
   .nbl{--o:#F26B21;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;--bg:#FAF8F5;
     max-width:720px;margin:0 auto;padding:8px}
@@ -133,18 +133,7 @@
       if (!json || !json.success) throw new Error((json && json.error) || "Failed to load blogs");
       render(json.data || [], json.pagination);
       try {
-        if (typeof window.nanakPostEmbedHeight === "function") {
-          window.nanakPostEmbedHeight();
-        } else {
-          var root = document.getElementById("nbl-root");
-          var h = root
-            ? Math.ceil(Math.max(root.getBoundingClientRect().height, root.offsetHeight || 0)) + 8
-            : 0;
-          if (h > 40) {
-            parent.postMessage({ type: "nanak-embed-resize", height: h, source: "nanak-blog-list" }, "*");
-            parent.postMessage({ type: "nanak-blog-list-height", height: h, source: "nanak-blog-list" }, "*");
-          }
-        }
+        /* no-op: do not resize WordPress parent */
       } catch (e) {}
     })
     .catch(function (err) {

@@ -50,7 +50,7 @@ html.framed,html.framed body{
   min-height:0 !important;
   height:auto !important;
   overflow-x:auto;
-  overflow-y:hidden;
+  overflow-y:auto;
   width:100%;
   max-width:none;
   min-width:1080px; /* keep 2-column desktop UI inside WP iframes */
@@ -347,49 +347,7 @@ if (window.parent && window.parent !== window) {
 
 var __payLastH = 0;
 function postEmbedHeight(){
-  try {
-    if (typeof window.nanakPostEmbedHeight === "function") {
-      window.nanakPostEmbedHeight();
-      return;
-    }
-    // Content only (.wrap) — never document scrollHeight (blank-space loop).
-    var wraps = document.querySelectorAll(".wrap");
-    var h = 0;
-    for (var i = 0; i < wraps.length; i++) {
-      var el = wraps[i];
-      h += Math.max(el.getBoundingClientRect().height || 0, el.offsetHeight || 0);
-    }
-    if (!h) {
-      var bodyKids = document.body ? document.body.children : [];
-      for (var j = 0; j < bodyKids.length; j++) {
-        h += bodyKids[j].getBoundingClientRect().height || 0;
-      }
-    }
-    h = Math.ceil(h) + 8;
-    if (!h || h < 40 || Math.abs(h - __payLastH) < 4) return;
-    __payLastH = h;
-    try {
-      var frames = window.parent.document.querySelectorAll("iframe");
-      frames.forEach(function(frame){
-        try {
-          if (frame.contentWindow === window) {
-            frame.style.width = "100%";
-            frame.style.maxWidth = "100%";
-            frame.style.minWidth = "1080px";
-            frame.style.height = h + "px";
-            frame.style.overflow = "hidden";
-            frame.removeAttribute("width");
-            frame.removeAttribute("height");
-            frame.setAttribute("scrolling", "no");
-          }
-        } catch (_) {}
-      });
-    } catch (_) {}
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "nanak-embed-resize", height: h, width: 1120, source: "pay-calculator" }, "*");
-      window.parent.postMessage({ type: "resize-iframe", height: h }, "*");
-    }
-  } catch (e) {}
+  /* no-op: do not resize WordPress parent (avoids blank-space scroll jump) */
 }
 
 /* =====================================================

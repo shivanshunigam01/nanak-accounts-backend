@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nanak Newsletter Signup</title>
 <style id="nnl-styles">
-  html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:hidden;width:100%}
+  html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:auto;width:100%}
   body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A;font-size:16px;-webkit-text-size-adjust:100%}
   .nnl{--o:#F26B21;--od:#D9550E;--navy:#1B2A4A;--grey:#6B7280;--line:#E5E7EB;
     font-family:inherit;max-width:100%;width:100%;padding:0;display:block;box-sizing:border-box}
@@ -104,20 +104,7 @@
 
   var __nnlLastH = 0;
   function postHeight(){
-    try {
-      if (typeof window.nanakPostEmbedHeight === 'function') {
-        window.nanakPostEmbedHeight();
-        return;
-      }
-      var h = contentHeight();
-      if (!h || h < 40 || Math.abs(h - __nnlLastH) < 4) return;
-      __nnlLastH = h;
-      applyParentFrame(h);
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'nanak-embed-resize', height: h, source: 'newsletter' }, '*');
-        window.parent.postMessage({ type: 'resize-iframe', height: h }, '*');
-      }
-    } catch (e) {}
+    /* no-op: do not resize WordPress parent (avoids blank-space scroll jump) */
   }
 
   function submitSubscriber(payload){
