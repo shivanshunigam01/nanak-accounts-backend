@@ -1,8 +1,9 @@
 /**
- * Nanak iframe parent resize bridge — load once on WordPress:
+ * Nanak iframe parent resize — paste once in WordPress footer:
  *   <script src="https://online.nanakaccountants.com.au/embeds/iframe-parent-resize.js" defer></script>
  *
- * Always grows iframe to full content height (fixes half-cut pricing cards).
+ * Sizes ALL Nanak iframes like the working pay-calculator embed.
+ * Rejects blank-space inflation jumps.
  */
 (function () {
   if (window.__nanakIframeParentResize) return;
@@ -11,15 +12,20 @@
   function apply(source, height) {
     var h = Number(height);
     if (!h || h < 40) return;
+    if (h > 12000) return; // hard safety cap
+
     document.querySelectorAll("iframe").forEach(function (frame) {
       try {
         if (frame.contentWindow !== source) return;
         var prev = parseFloat(frame.style.height) || 0;
-        // Prefer growing to full content; allow shrink only if clearly smaller.
-        if (h < prev && prev - h < 80) return;
-        if (Math.abs(prev - h) < 2) return;
+
+        // Reject absurd growth (the blank white gap bug).
+        if (prev > 150 && h > prev + 1800) return;
+        if (prev > 150 && h > prev * 2.5) return;
+        if (Math.abs(prev - h) < 3) return;
+
         frame.dataset.nanakSized = "1";
-        frame.style.width = frame.style.width || "100%";
+        frame.style.width = "100%";
         frame.style.maxWidth = "100%";
         frame.style.display = "block";
         frame.style.overflow = "hidden";
