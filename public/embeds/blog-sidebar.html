@@ -23,6 +23,7 @@
     border-radius:14px;
     padding:22px 20px 18px;
     max-width:420px;
+    min-height:200px;
     width:100%;
     box-sizing:border-box;
     margin:0 auto;
@@ -199,7 +200,11 @@
 
   var __bsbLastH = 0;
   function postHeight(){
-    /* no-op: do not resize WordPress parent (avoids blank-space scroll jump) */
+    try {
+      if (typeof window.nanakPostEmbedHeight === 'function') {
+        window.nanakPostEmbedHeight();
+      }
+    } catch (e) {}
   }
 
   function parentPage(){
