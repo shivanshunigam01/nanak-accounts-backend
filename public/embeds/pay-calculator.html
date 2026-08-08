@@ -45,8 +45,37 @@ body{
   -webkit-font-smoothing:antialiased;
   min-height:100vh;
 }
-/* When framed on the marketing site, hug content height */
-html.framed,html.framed body{min-height:0;height:auto;overflow:auto}
+/* When framed on the marketing site: full desktop layout — never shrink to mobile. */
+html.framed,html.framed body{
+  min-height:0;
+  height:auto;
+  overflow-x:auto;
+  overflow-y:visible;
+  width:100%;
+  max-width:none;
+  min-width:1080px; /* keep 2-column desktop UI inside WP iframes */
+  font-size:16px;
+  background:#F4F7FB;
+}
+html.framed .wrap{
+  max-width:none;
+  width:100%;
+  padding:0 16px;
+  box-sizing:border-box;
+}
+html.framed header{padding:28px 0 20px}
+html.framed h1{
+  font-size:42px; /* fixed — vw would shrink with the iframe */
+  max-width:none;
+}
+html.framed .header-note{font-size:16px;max-width:720px}
+html.framed .takehome .big{font-size:52px}
+html.framed .grid{
+  grid-template-columns:400px minmax(0,1fr);
+  gap:26px;
+}
+html.framed .panel{padding:26px}
+html.framed footer{padding:16px 0 24px}
 h1,h2,h3{font-family:'Poppins',sans-serif}
 .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
 
@@ -62,7 +91,10 @@ h1 .hl{color:var(--orange)}
 /* ---------- layout ---------- */
 main{padding:14px 0 10px}
 .grid{display:grid;grid-template-columns:400px 1fr;gap:26px;align-items:start}
-@media(max-width:920px){.grid{grid-template-columns:1fr}}
+/* Solo page (not iframe): stack on narrow screens. Framed keeps desktop via html.framed rules. */
+@media(max-width:920px){
+  html:not(.framed) .grid{grid-template-columns:1fr}
+}
 
 .panel{background:var(--card);border:1px solid var(--blue-border);border-radius:var(--radius);padding:26px;transition:border-color .15s ease}
 .panel:hover{border-color:var(--blue-hover)}
@@ -317,10 +349,29 @@ function postEmbedHeight(){
   try {
     var h = Math.ceil(Math.max(
       document.documentElement.scrollHeight,
-      document.body.scrollHeight
-    )) + 8;
+      document.body.scrollHeight,
+      document.body.offsetHeight
+    )) + 12;
+    // Prefer full-width parent iframe so the calculator does not look "shrunk".
+    try {
+      var frames = window.parent.document.querySelectorAll("iframe");
+      frames.forEach(function(frame){
+        try {
+          if (frame.contentWindow === window) {
+            frame.style.width = "100%";
+            frame.style.maxWidth = "100%";
+            frame.style.minWidth = "1080px";
+            frame.style.height = h + "px";
+            frame.removeAttribute("width");
+            frame.removeAttribute("height");
+            frame.setAttribute("scrolling", "no");
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "nanak-embed-resize", height: h, source: "pay-calculator" }, "*");
+      window.parent.postMessage({ type: "nanak-embed-resize", height: h, width: 1120, source: "pay-calculator" }, "*");
+      window.parent.postMessage({ type: "resize-iframe", height: h }, "*");
     }
   } catch (e) {}
 }
