@@ -1,9 +1,8 @@
 /**
- * Nanak iframe parent resize — paste once in WordPress footer:
- *   <script src="https://online.nanakaccountants.com.au/embeds/iframe-parent-resize.js" defer></script>
+ * WordPress footer (once) — sizes ALL Nanak iframes to full content height
+ * so the page scrolls normally with no half-cut embeds:
  *
- * Sizes ALL Nanak iframes like the working pay-calculator embed.
- * Rejects blank-space inflation jumps.
+ *   <script src="https://online.nanakaccountants.com.au/embeds/iframe-parent-resize.js" defer></script>
  */
 (function () {
   if (window.__nanakIframeParentResize) return;
@@ -12,25 +11,22 @@
   function apply(source, height) {
     var h = Number(height);
     if (!h || h < 40) return;
-    if (h > 12000) return; // hard safety cap
+    if (h > 10000) h = 10000;
 
     document.querySelectorAll("iframe").forEach(function (frame) {
       try {
         if (frame.contentWindow !== source) return;
         var prev = parseFloat(frame.style.height) || 0;
-
-        // Reject absurd growth (the blank white gap bug).
-        if (prev > 150 && h > prev + 1800) return;
-        if (prev > 150 && h > prev * 2.5) return;
-        if (Math.abs(prev - h) < 3) return;
+        if (Math.abs(prev - h) < 4) return;
 
         frame.dataset.nanakSized = "1";
-        frame.style.width = "100%";
-        frame.style.maxWidth = "100%";
-        frame.style.display = "block";
-        frame.style.overflow = "hidden";
-        frame.style.minHeight = "0";
-        frame.style.height = h + "px";
+        frame.style.setProperty("width", "100%", "important");
+        frame.style.setProperty("max-width", "100%", "important");
+        frame.style.setProperty("display", "block", "important");
+        frame.style.setProperty("overflow", "hidden", "important");
+        frame.style.setProperty("min-height", "0", "important");
+        frame.style.setProperty("max-height", "none", "important");
+        frame.style.setProperty("height", h + "px", "important");
         frame.removeAttribute("height");
         frame.setAttribute("scrolling", "no");
       } catch (_) {}

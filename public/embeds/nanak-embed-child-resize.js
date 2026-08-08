@@ -1,33 +1,32 @@
 /**
- * Child-side embed resize — same behaviour as working pay-calculator iframe:
- * size once to full content, no blank-space inflation, no internal scroll.
+ * Child embed resize — post full content height to WordPress parent.
+ * No growth caps that left pricing cards half-visible.
  */
 (function () {
   if (window.__nanakEmbedChildResize) return;
   window.__nanakEmbedChildResize = true;
 
   var lastHeight = 0;
-  var stableHits = 0;
-  var stopped = false;
-  var settleTimers = [];
-  var ro = null;
   var debounceTimer = 0;
+  var settleTimers = [];
 
   function applyFramedStyles() {
     if (!(window.parent && window.parent !== window)) return;
-    document.documentElement.classList.add("framed");
-    document.documentElement.style.height = "auto";
-    document.documentElement.style.minHeight = "0";
-    document.documentElement.style.maxHeight = "none";
-    document.documentElement.style.width = "100%";
-    document.documentElement.style.overflow = "hidden";
-    if (document.body) {
-      document.body.classList.add("framed");
-      document.body.style.height = "auto";
-      document.body.style.minHeight = "0";
-      document.body.style.maxHeight = "none";
-      document.body.style.width = "100%";
-      document.body.style.overflow = "hidden";
+    var html = document.documentElement;
+    var body = document.body;
+    html.classList.add("framed");
+    html.style.setProperty("height", "auto", "important");
+    html.style.setProperty("min-height", "0", "important");
+    html.style.setProperty("max-height", "none", "important");
+    html.style.setProperty("overflow", "hidden", "important");
+    html.style.setProperty("width", "100%", "important");
+    if (body) {
+      body.classList.add("framed");
+      body.style.setProperty("height", "auto", "important");
+      body.style.setProperty("min-height", "0", "important");
+      body.style.setProperty("max-height", "none", "important");
+      body.style.setProperty("overflow", "hidden", "important");
+      body.style.setProperty("width", "100%", "important");
     }
   }
 
@@ -53,61 +52,28 @@
   function measure() {
     var el = rootEl();
     if (!el) return 0;
-    el.style.height = "auto";
-    el.style.minHeight = "0";
-    el.style.maxHeight = "none";
-    // Content only — never document/body scrollHeight (blank growth).
-    var h = Math.max(
-      el.scrollHeight || 0,
-      el.offsetHeight || 0,
-      Math.ceil(el.getBoundingClientRect().height || 0)
-    );
-    return Math.max(Math.ceil(h) + 20, 80);
-  }
+    el.style.setProperty("height", "auto", "important");
+    el.style.setProperty("min-height", "0", "important");
+    el.style.setProperty("max-height", "none", "important");
 
-  function applyParent(h) {
-    try {
-      window.parent.document.querySelectorAll("iframe").forEach(function (frame) {
-        try {
-          if (frame.contentWindow !== window) return;
-          var prev = parseFloat(frame.style.height) || 0;
-          if (Math.abs(prev - h) < 3) return;
-          frame.style.height = h + "px";
-          frame.style.width = "100%";
-          frame.style.maxWidth = "100%";
-          frame.style.minHeight = "0";
-          frame.style.overflow = "hidden";
-          frame.removeAttribute("height");
-          frame.setAttribute("scrolling", "no");
-          frame.dataset.nanakSized = "1";
-        } catch (_) {}
-      });
-    } catch (_) {}
+    var fromKids = 0;
+    var kids = el.children;
+    for (var i = 0; i < kids.length; i++) {
+      var child = kids[i];
+      fromKids = Math.max(fromKids, child.offsetTop + child.offsetHeight);
+    }
+
+    var h = Math.max(fromKids, el.scrollHeight || 0, el.offsetHeight || 0);
+    return Math.min(Math.max(Math.ceil(h) + 24, 80), 10000);
   }
 
   function post() {
-    if (stopped) return;
     try {
       applyFramedStyles();
       var h = measure();
       if (!h || h < 40) return;
-      if (lastHeight > 150 && h > lastHeight + 1800) return;
-      if (lastHeight > 150 && h > lastHeight * 2.5) return;
-
-      if (Math.abs(h - lastHeight) < 3) {
-        stableHits += 1;
-        if (stableHits >= 4) {
-          stopped = true;
-          settleTimers.forEach(clearTimeout);
-          if (ro) try { ro.disconnect(); } catch (_) {}
-          clearTimeout(debounceTimer);
-        }
-        return;
-      }
-
-      stableHits = 0;
+      if (Math.abs(h - lastHeight) < 4) return;
       lastHeight = h;
-      applyParent(h);
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(
           { type: "nanak-embed-resize", height: h, source: "embed-child" },
@@ -119,20 +85,15 @@
   }
 
   function schedulePost() {
-    if (stopped) return;
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(post, 120);
+    debounceTimer = setTimeout(post, 100);
   }
 
-  window.nanakPostEmbedHeight = function () {
-    stopped = false;
-    stableHits = 0;
-    post();
-  };
+  window.nanakPostEmbedHeight = post;
 
   function scheduleSettle() {
     settleTimers.forEach(clearTimeout);
-    settleTimers = [80, 300, 800, 1500, 2500].map(function (ms) {
+    settleTimers = [80, 300, 700, 1200, 2000, 3500, 5000].map(function (ms) {
       return setTimeout(post, ms);
     });
   }
@@ -155,7 +116,7 @@
 
   if (typeof ResizeObserver !== "undefined") {
     try {
-      ro = new ResizeObserver(schedulePost);
+      var ro = new ResizeObserver(schedulePost);
       var attach = function () {
         var r = rootEl();
         if (r) ro.observe(r);
