@@ -17,6 +17,7 @@ const SRC_LABEL = {
   income_tax_calculator: "Income tax calculator",
   pay_calculator: "Pay calculator",
   contact_us: "Contact us",
+  free_15min_call: "Free 15-min call",
   google_ads: "Google Ads",
   meta_ads: "Meta Ads",
   phone: "Phone call",
@@ -48,6 +49,7 @@ function scoreFor(src, svc, cb) {
   if (src === "newsletter") s -= 30;
   if (src === "blog" || src === "blog_card") s += 10;
   if (src === "contact_us") s += 12;
+  if (src === "free_15min_call" || src === "popup") s += 14;
   if (src === "income_tax_calculator" || src === "pay_calculator") s += 8;
   return Math.max(15, Math.min(100, s));
 }
@@ -61,10 +63,17 @@ function mapSource({ source, channel, explicit }) {
   if (src === "income_tax_calculator" || src === "income-tax-calculator") return "income_tax_calculator";
   if (src === "pay_calculator" || src === "pay-calculator") return "pay_calculator";
   if (src === "contact_us" || src === "contact-us" || src === "contactus" || ch === "contact_us") return "contact_us";
+  if (
+    src === "free_15min_call" ||
+    src === "free-15min-call" ||
+    src === "free_15min" ||
+    ch === "website_popup" ||
+    ch === "free_15min_call"
+  ) {
+    return "free_15min_call";
+  }
   if (src === "blog" || src === "blog_sidebar" || ch === "blog_sidebar") return "blog";
   if (ch === "blog" || src === "blog_card") return "blog_card";
-  if (ch === "website_popup" || (src === "free_15min_call" && ch !== "blog")) return "popup";
-  if (src === "free_15min_call" && ch === "blog") return "blog_card";
   if (src.startsWith("tax_check")) return "tax_check";
   if (SRC_LABEL[src]) return src;
   return "popup";

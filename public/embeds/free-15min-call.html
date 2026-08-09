@@ -3,37 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nanak — Free 15-Minute Call</title>
-<style id="npc-styles">
-  html,body{margin:0;padding:0;background:transparent;height:auto!important;min-height:0!important;overflow:auto}
-  html.framed,html.framed body{height:auto!important;min-height:0!important;overflow:auto}
-  body{font-family:'Segoe UI',-apple-system,Roboto,Arial,sans-serif;color:#22252A}
-
-  .npc{--o:#F26B21;--od:#D9550E;--os:#FEF1E8;--navy:#1B2A4A;--grey:#6B7280;--faint:#9CA3AF;
-    --line:#E5E7EB;--green:#0E7C4A;
-    max-width:660px;margin:0;background:#fff;border:1.5px solid var(--line);
-    border-radius:16px;overflow:hidden;font-family:inherit;color:#22252A;
-    box-shadow:0 26px 70px rgba(27,42,74,.32)}
-  .npc *{box-sizing:border-box;margin:0;padding:0}
-
-  .npc-top{background:linear-gradient(135deg,#1B2A4A,#25395F);padding:14px 20px 13px;color:#fff;position:relative;overflow:hidden}
-  .npc-top:after{content:'';position:absolute;right:-40px;top:-40px;width:150px;height:150px;
-    border-radius:50%;background:rgba(242,107,33,.16)}
-  .npc-flag{display:inline-block;background:var(--o);color:#fff;font-size:9px;font-weight:800;
-    letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;margin-bottom:6px}
-  .npc-h{font-size:18px;font-weight:800;line-height:1.2;letter-spacing:-0.01em;position:relative}
+<title>Free 15-Minute Call | Nanak Accountants</title>
+<style>
+  :root{
+    --o:#F26B21;--od:#D9550E;--os:#FEF1E8;--navy:#1B2A4A;--navy-2:#25395F;
+    --grey:#6B7280;--faint:#9CA3AF;--line:#E5E7EB;--green:#0E7C4A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    margin:0;padding:0;background:transparent;
+    height:auto!important;min-height:0!important;overflow:hidden;width:100%;
+    font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Arial,sans-serif;
+    color:#22252A;-webkit-font-smoothing:antialiased;
+  }
+  .npc{
+    max-width:720px;margin:0 auto;background:#fff;
+    border:1.5px solid var(--line);border-radius:16px;overflow:hidden;
+    box-shadow:0 18px 50px rgba(27,42,74,.14);
+  }
+  .npc-top{
+    background:linear-gradient(135deg,var(--navy),var(--navy-2));
+    padding:18px 22px 16px;color:#fff;position:relative;overflow:hidden;
+  }
+  .npc-top:after{
+    content:'';position:absolute;right:-40px;top:-40px;width:150px;height:150px;
+    border-radius:50%;background:rgba(242,107,33,.16);
+  }
+  .npc-flag{
+    display:inline-block;background:var(--o);color:#fff;
+    font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    padding:4px 9px;border-radius:5px;margin-bottom:10px;position:relative;
+  }
+  .npc-h{font-size:clamp(18px,3.4vw,24px);font-weight:800;line-height:1.2;letter-spacing:-0.01em;position:relative}
   .npc-h span{color:#FFB27D}
-  .npc-p{font-size:12.5px;color:#C3CDE2;margin-top:4px;position:relative;line-height:1.45}
+  .npc-p{font-size:13.5px;color:#C3CDE2;margin-top:6px;position:relative;line-height:1.45;max-width:54ch}
 
-  .npc-body{padding:14px 20px 15px}
-  .npc-gets{display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:12px}
-  .npc-get{display:inline-flex;gap:5px;align-items:center;font-size:11.8px;color:#4B5563;line-height:1.3;white-space:nowrap}
-  .npc-get b{color:var(--green);flex:0 0 auto;font-weight:800}
+  .npc-body{padding:16px 22px 16px}
+  .npc-gets{display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:14px}
+  .npc-get{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:#4B5563;line-height:1.3}
+  .npc-get b{color:var(--green);flex:none;font-weight:800}
 
-  .npc-q{font-size:13px;font-weight:700;margin-bottom:8px}
-  .npc-chips{display:flex;flex-wrap:wrap;gap:7px}
-  .npc-chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:8px 13px;
-    font-size:12.5px;font-family:inherit;cursor:pointer;transition:all .15s;color:#22252A;line-height:1.2}
+  .npc-q{font-size:14.5px;font-weight:700;margin-bottom:10px;color:#111}
+  .npc-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .npc-chip{
+    border:1.5px solid var(--line);background:#fff;border-radius:999px;
+    padding:10px 14px;font-size:13.5px;font-family:inherit;cursor:pointer;
+    transition:all .15s;color:#22252A;line-height:1.2;
+  }
   .npc-chip:hover{border-color:var(--o);background:var(--os)}
   .npc-chip.sel{border-color:var(--o);background:var(--o);color:#fff;font-weight:600}
 
@@ -41,312 +57,372 @@
   .npc-step.on{display:block;animation:npcfade .22s ease}
   @keyframes npcfade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 
-  .npc-teaser{font-size:12.3px;font-weight:700;color:var(--navy);background:var(--os);
-    border-left:3px solid var(--o);border-radius:0 7px 7px 0;padding:8px 11px;margin-bottom:10px;line-height:1.35}
-  .npc-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-  @media(max-width:560px){.npc-fields{grid-template-columns:1fr}}
-  .npc-f{position:relative}
-  .npc-field{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;
-    font-size:14px;font-family:inherit;outline:none;background:#fff}
+  .npc-teaser{
+    font-size:13px;font-weight:700;color:var(--navy);background:var(--os);
+    border-left:3px solid var(--o);border-radius:0 8px 8px 0;
+    padding:10px 12px;margin-bottom:12px;line-height:1.4;
+  }
+  .npc-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .npc-field{
+    width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;
+    font-size:16px;font-family:inherit;outline:none;background:#fff;
+  }
   .npc-field:focus{border-color:var(--o)}
   .npc-field.bad{border-color:#DC2626;background:#FFFBFB}
-  .npc-e{font-size:11.5px;color:#DC2626;margin-top:4px;display:none}
+  .npc-e{font-size:12px;color:#DC2626;margin-top:4px;display:none}
   .npc-e.on{display:block}
-  .npc-btn{width:100%;margin-top:9px;background:linear-gradient(135deg,#F58540,#F26B21);color:#fff;
-    border:none;cursor:pointer;padding:12px 18px;border-radius:10px;font-size:14.5px;font-weight:800;
-    font-family:inherit;transition:filter .15s,transform .1s}
-  .npc-btn:hover{filter:brightness(1.06)}
-  .npc-btn:active{transform:scale(.99)}
+  .npc-btn{
+    width:100%;margin-top:12px;background:linear-gradient(135deg,#F58540,#F26B21);color:#fff;
+    border:none;cursor:pointer;padding:13px 18px;border-radius:10px;
+    font-size:15px;font-weight:800;font-family:inherit;
+  }
+  .npc-btn:hover{filter:brightness(1.05)}
   .npc-btn:disabled{opacity:.65;cursor:default}
-  .npc-micro{font-size:10.8px;color:var(--grey);margin-top:7px;text-align:center;line-height:1.4}
-  .npc-back{background:none;border:none;color:var(--grey);font-size:11px;cursor:pointer;
-    font-family:inherit;margin-top:7px;padding:2px 0;text-decoration:underline;display:block}
+  .npc-micro{font-size:11.5px;color:var(--grey);margin-top:8px;text-align:center;line-height:1.4}
+  .npc-back{
+    background:none;border:none;color:var(--grey);font-size:12px;cursor:pointer;
+    font-family:inherit;margin-top:8px;padding:2px 0;text-decoration:underline;display:block;
+  }
 
-  .npc-done{display:none;text-align:center;padding:2px 0}
+  .npc-done{display:none;text-align:center;padding:8px 0 4px}
   .npc-done.on{display:block}
-  .npc-done .tick{width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;
-    display:flex;align-items:center;justify-content:center;font-size:19px;margin:0 auto 8px}
-  .npc-done h4{font-size:15.5px;font-weight:800;color:var(--navy)}
-  .npc-done p{font-size:12.3px;color:var(--grey);margin-top:4px;line-height:1.45}
+  .npc-done .tick{
+    width:42px;height:42px;border-radius:50%;background:var(--green);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 10px;
+  }
+  .npc-done h4{font-size:17px;font-weight:800;color:var(--navy)}
+  .npc-done p{font-size:13.5px;color:var(--grey);margin-top:6px;line-height:1.45}
 
-  .npc-trust{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:center;
-    padding:8px 20px 9px;background:#FAF8F5;border-top:1px solid var(--line)}
-  .npc-trust span{font-size:10.8px;color:var(--grey);white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+  .npc-trust{
+    display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;
+    padding:12px 18px;background:#FAF8F5;border-top:1px solid var(--line);
+  }
+  .npc-trust span{
+    font-size:12px;color:var(--grey);display:inline-flex;align-items:center;gap:6px;line-height:1.3;
+  }
   .npc-trust b{color:var(--o);font-weight:800}
-  .npc-disc{font-size:9.5px;color:var(--faint);line-height:1.4;padding:0 20px 10px;text-align:center}
+  .npc-disc{font-size:11px;color:var(--faint);line-height:1.4;padding:0 18px 12px;text-align:center}
 
-  .npc-btn:focus-visible,.npc-chip:focus-visible,.npc-field:focus-visible{outline:3px solid rgba(242,107,33,.4);outline-offset:2px}
-  @media(prefers-reduced-motion:reduce){.npc *{animation:none!important;transition:none!important}}
+  .npc-chip:focus-visible,.npc-field:focus-visible,.npc-btn:focus-visible{
+    outline:3px solid rgba(242,107,33,.35);outline-offset:2px;
+  }
 
-  .npc-bg{position:fixed;inset:0;background:rgba(27,42,74,.45);display:flex;align-items:center;
-    justify-content:center;z-index:9999;padding:18px;animation:npcbg .2s ease}
-  @keyframes npcbg{from{opacity:0}to{opacity:1}}
-  .npc-shell{position:relative;width:520px;max-width:100%;max-height:94vh;overflow-y:auto;
-    animation:npcin .3s cubic-bezier(.2,.9,.3,1.2)}
-  @keyframes npcin{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
-  .npc-x{position:absolute;top:10px;right:10px;z-index:2;width:28px;height:28px;border:none;border-radius:8px;
-    background:rgba(255,255,255,.16);color:#fff;font-size:13px;cursor:pointer;line-height:1}
+  /* overlay=1 — fullscreen modal used by free-15min-call-loader.js */
+  html.npc-overlay,html.npc-overlay body{
+    overflow:hidden;height:100%!important;min-height:100%!important;
+  }
+  .npc-bg{
+    position:fixed;inset:0;background:rgba(27,42,74,.45);
+    display:flex;align-items:center;justify-content:center;z-index:9999;padding:18px;
+  }
+  .npc-shell{position:relative;width:560px;max-width:100%;max-height:94vh;overflow-y:auto}
+  .npc-x{
+    position:absolute;top:10px;right:10px;z-index:2;width:28px;height:28px;border:none;border-radius:8px;
+    background:rgba(255,255,255,.16);color:#fff;font-size:13px;cursor:pointer;line-height:1;
+  }
   .npc-x:hover{background:rgba(255,255,255,.3)}
-  .npc-x:focus-visible{outline:3px solid rgba(255,255,255,.7);outline-offset:2px}
+  html:not(.npc-overlay) .npc-bg{display:contents}
+  html:not(.npc-overlay) .npc-shell{display:contents}
+  html:not(.npc-overlay) .npc-x{display:none}
 
-  /* Host already provides the modal chrome (WP /popup iframe) — no second backdrop */
-  .npc-bg.npc-embedded{position:relative;inset:auto;background:transparent;padding:0;z-index:auto;
-    animation:none;min-height:0;align-items:stretch;justify-content:flex-start}
-  .npc-bg.npc-embedded .npc-shell{width:100%;max-height:none;animation:none;margin:0 auto}
-  .npc-bg.npc-embedded .npc-x{display:none}
-  html.npc-embedded,html.npc-embedded body{overflow:auto;height:auto!important;min-height:0!important}
+  @media(max-width:640px){
+    .npc{border-radius:14px}
+    .npc-top{padding:16px 16px 14px}
+    .npc-body{padding:14px 16px}
+    .npc-fields{grid-template-columns:1fr}
+    .npc-chip{width:100%;text-align:center}
+    .npc-gets{gap:6px 12px}
+    .npc-trust{gap:8px 12px;justify-content:flex-start}
+  }
 </style>
 </head>
-<body>
-
+<body data-embed-root="npc">
 <div class="npc-bg" id="npc-bg">
-  <div class="npc-shell" role="dialog" aria-modal="true" aria-label="Free 15 minute call with an accountant">
+  <div class="npc-shell" role="dialog" aria-label="Free 15 minute call with an accountant">
     <button type="button" class="npc-x" id="npc-x" aria-label="Close">&#10005;</button>
     <div class="npc" id="npc">
-      <div class="npc-top">
-        <span class="npc-flag">Free · No obligation</span>
-        <div class="npc-h">Talk to a real accountant for <span>15 minutes</span></div>
-        <div class="npc-p">Bring one question. We'll tell you straight if it needs work - and if it doesn't, we'll say that too.</div>
+  <div class="npc-top">
+    <span class="npc-flag">Free · No obligation</span>
+    <div class="npc-h">Talk to a real accountant for <span>15 minutes</span></div>
+    <div class="npc-p">Bring one question. We'll tell you straight if it needs work - and if it doesn't, we'll say that too.</div>
+  </div>
+
+  <div class="npc-body">
+    <div class="npc-gets">
+      <div class="npc-get"><b>&#10003;</b><span>Registered tax agent</span></div>
+      <div class="npc-get"><b>&#10003;</b><span>No sales script</span></div>
+      <div class="npc-get"><b>&#10003;</b><span>Case study by email</span></div>
+      <div class="npc-get"><b>&#10003;</b><span>Booked within 1 business day</span></div>
+    </div>
+
+    <div id="npc-form">
+      <div class="npc-step on" data-step="1">
+        <div class="npc-q">First - which best describes you?</div>
+        <div class="npc-chips" id="npc-profiles">
+          <button type="button" class="npc-chip" data-v="employee">Salary earner</button>
+          <button type="button" class="npc-chip" data-v="sole_trader">Sole trader / ABN</button>
+          <button type="button" class="npc-chip" data-v="company_trust">Company or trust</button>
+          <button type="button" class="npc-chip" data-v="investor">Investor</button>
+        </div>
       </div>
 
-      <div class="npc-body">
-        <div class="npc-gets">
-          <div class="npc-get"><b>&#10003;</b><span>Registered tax agent</span></div>
-          <div class="npc-get"><b>&#10003;</b><span>No sales script</span></div>
-          <div class="npc-get"><b>&#10003;</b><span>Case study by email</span></div>
-          <div class="npc-get"><b>&#10003;</b><span>Booked within 1 business day</span></div>
-        </div>
-
-        <div id="npc-form">
-          <div class="npc-step on" data-step="1">
-            <div class="npc-q">First - which best describes you?</div>
-            <div class="npc-chips" id="npc-profiles">
-              <button type="button" class="npc-chip" data-v="employee">Salary earner</button>
-              <button type="button" class="npc-chip" data-v="sole_trader">Sole trader / ABN</button>
-              <button type="button" class="npc-chip" data-v="company_trust">Company or trust</button>
-              <button type="button" class="npc-chip" data-v="investor">Investor</button>
-            </div>
+      <div class="npc-step" data-step="2">
+        <div class="npc-teaser" id="npc-teaser"></div>
+        <div class="npc-fields">
+          <div>
+            <input class="npc-field" id="npc-email" type="email" placeholder="Email" autocomplete="email">
+            <div class="npc-e" id="npc-e-email">Enter a valid email</div>
           </div>
-
-          <div class="npc-step" data-step="2">
-            <div class="npc-teaser" id="npc-teaser"></div>
-            <div class="npc-fields">
-              <div class="npc-f">
-                <input class="npc-field" id="npc-email" type="email" placeholder="Email" autocomplete="email">
-                <div class="npc-e" id="npc-e-email">Enter a valid email</div>
-              </div>
-              <div class="npc-f">
-                <input class="npc-field" id="npc-mobile" type="tel" placeholder="Mobile" autocomplete="tel" inputmode="tel">
-                <div class="npc-e" id="npc-e-mobile">Enter a valid Australian mobile</div>
-              </div>
-            </div>
-            <button type="button" class="npc-btn" id="npc-submit">Book my free 15 minutes</button>
-            <div class="npc-micro">We call once to arrange a time. Mobile used for this call only. Tax tips by email - unsubscribe anytime.</div>
-            <button type="button" class="npc-back" id="npc-back">Back</button>
+          <div>
+            <input class="npc-field" id="npc-mobile" type="tel" placeholder="Mobile" autocomplete="tel" inputmode="tel">
+            <div class="npc-e" id="npc-e-mobile">Enter a valid Australian mobile</div>
           </div>
         </div>
-
-        <div class="npc-done" id="npc-done">
-          <div class="tick">&#10003;</div>
-          <h4>Booked - we'll call you</h4>
-          <p>An accountant will ring to lock in your 15 minutes, usually within one business day. Case study on its way to your inbox.</p>
-        </div>
+        <button type="button" class="npc-btn" id="npc-submit">Book my free 15 minutes</button>
+        <div class="npc-micro">We call once to arrange a time. Mobile used for this call only. Tax tips by email - unsubscribe anytime.</div>
+        <button type="button" class="npc-back" id="npc-back">Back</button>
       </div>
+    </div>
 
-      <div class="npc-trust">
-        <span><b>&#10003;</b> Registered Tax Agent 26113345</span>
-        <span><b>&#9733;</b> 1,000+ five-star Google reviews</span>
-        <span><b>&#10003;</b> 8+ offices Australia-wide</span>
-      </div>
-      <div class="npc-disc">General information only. The call is not personal tax, financial or legal advice.</div>
+    <div class="npc-done" id="npc-done">
+      <div class="tick">&#10003;</div>
+      <h4>You're booked in</h4>
+      <p>We'll call within 1 business day to lock a 15-minute time that suits you.</p>
+    </div>
+  </div>
+
+  <div class="npc-trust">
+    <span><b>&#10003;</b> Registered Tax Agent 26113345</span>
+    <span><b>&#9733;</b> 1,000+ five-star Google reviews</span>
+    <span><b>&#10003;</b> 8+ offices Australia-wide</span>
+  </div>
+  <div class="npc-disc">General information only. The call is not personal tax, financial or legal advice.</div>
     </div>
   </div>
 </div>
 
 <script>
-(function(){
-  /* overlay=1 → fullscreen dimmed modal (loader.js). Default = card only for host popups. */
+(function () {
   var isOverlay = false;
   try {
-    isOverlay = new URLSearchParams(window.location.search).get('overlay') === '1';
+    isOverlay = new URLSearchParams(window.location.search).get("overlay") === "1";
   } catch (e) {}
+  if (isOverlay) document.documentElement.classList.add("npc-overlay");
 
-  var bgEl = document.getElementById('npc-bg');
-  if (!isOverlay && bgEl) {
-    document.documentElement.classList.add('npc-embedded');
-    bgEl.classList.add('npc-embedded');
-  }
-
-  function notifyParent(type){
+  var LEAD_API = (function () {
     try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: type, source: 'nanak-free-15min' }, '*');
+      var h = location.hostname || "";
+      if (h.indexOf("connect.cavaluer.com") !== -1 || h === "localhost" || h === "127.0.0.1") {
+        return "/api/leads";
       }
     } catch (e) {}
-  }
-
-  function notifyResize(){
-    try {
-      if (typeof window.nanakPostEmbedHeight === 'function') window.nanakPostEmbedHeight();
-    } catch (e) {}
-  }
-
-  function parentPage(){
-    try {
-      if (document.referrer) {
-        var u = new URL(document.referrer);
-        return u.pathname || '/';
-      }
-    } catch (e) {}
-    return '/';
-  }
-
-  function parentTitle(){
-    try {
-      if (document.referrer) return document.referrer;
-    } catch (e) {}
-    return null;
-  }
-
-  function submitLead(payload){
-    // Canonical Lead CRM endpoint (popup → source: popup)
-    return fetch('/api/leads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).then(function(res){
-      return res.json().then(function(body){
-        if (!res.ok || body.success === false) {
-          throw new Error((body && body.message) || 'Submission failed');
-        }
-        return body;
-      });
-    });
-  }
+    return "https://api.connect.cavaluer.com/api/leads";
+  })();
+  var LEAD_SOURCE = "free_15min_call";
 
   var MAP = {
-    employee:{svc:'individual_tax', base:70, focus:'deductions_super',
-      teaser:'Most useful for you: what you can actually claim, and whether your super is doing its job.'},
-    sole_trader:{svc:'business_tax', base:80, focus:'structure_expenses',
-      teaser:'Most useful for you: whether your sole trader setup still fits your turnover, and what it costs if not.'},
-    company_trust:{svc:'business_advisory', base:90, focus:'structure_cost_optimisation',
-      teaser:'Most useful for you: distributions, Division 7A exposure, and whether every entity still earns its keep.'},
-    investor:{svc:'property_tax', base:85, focus:'loans_depreciation_cgt',
-      teaser:'Most useful for you: depreciation you may be missing, and your CGT position before you sell.'}
+    employee: {
+      svc: "individual_tax",
+      base: 70,
+      focus: "deductions_super",
+      teaser: "Most useful for you: what you can actually claim, and whether your super is doing its job."
+    },
+    sole_trader: {
+      svc: "business_tax",
+      base: 80,
+      focus: "structure_expenses",
+      teaser: "Most useful for you: whether your sole trader setup still fits your turnover, and what it costs if not."
+    },
+    company_trust: {
+      svc: "business_advisory",
+      base: 90,
+      focus: "structure_cost_optimisation",
+      teaser: "Most useful for you: distributions, Division 7A exposure, and whether every entity still earns its keep."
+    },
+    investor: {
+      svc: "property_tax",
+      base: 85,
+      focus: "loans_depreciation_cgt",
+      teaser: "Most useful for you: depreciation you may be missing, and your CGT position before you sell."
+    }
   };
 
-  function $(id){ return document.getElementById(id); }
   var profile = null;
 
-  var emailOk  = function(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
-  var mobileOk = function(v){
-    var d = v.replace(/[^\d]/g,'');
-    return d.length >= 9 && d.length <= 12;
-  };
+  function $(id) { return document.getElementById(id); }
 
-  function goto(n){
-    document.querySelectorAll('#npc .npc-step').forEach(function(s){
-      s.classList.toggle('on', +s.dataset.step === n);
-    });
-    if (!isOverlay) notifyResize();
+  function postHeight() {
+    try {
+      var el = $("npc");
+      if (!el) return;
+      var h = Math.ceil(Math.max(el.getBoundingClientRect().height, el.offsetHeight, el.scrollHeight)) + 8;
+      if (h > 900) h = 900;
+      if (h < 80) return;
+      try {
+        window.parent.document.querySelectorAll("iframe").forEach(function (frame) {
+          try {
+            if (frame.contentWindow === window) {
+              frame.style.height = h + "px";
+              frame.style.minHeight = "0";
+              frame.style.maxHeight = "none";
+              frame.style.overflow = "hidden";
+              frame.removeAttribute("height");
+              frame.setAttribute("scrolling", "no");
+            }
+          } catch (_) {}
+        });
+      } catch (_) {}
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: "nanak-embed-resize",
+          height: h,
+          source: "free_15min_call",
+          compact: true,
+          maxHeight: 900
+        }, "*");
+      }
+      if (typeof window.nanakPostEmbedHeight === "function") window.nanakPostEmbedHeight();
+    } catch (e) {}
   }
 
-  $('npc-profiles').querySelectorAll('.npc-chip').forEach(function(ch){
-    ch.addEventListener('click', function(){
-      $('npc-profiles').querySelectorAll('.npc-chip').forEach(function(c){ c.classList.remove('sel'); });
-      ch.classList.add('sel');
+  function parentPage() {
+    try {
+      if (document.referrer) return new URL(document.referrer).pathname || "/";
+    } catch (e) {}
+    return "/";
+  }
+
+  function emailOk(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+  function mobileOk(v) {
+    var d = v.replace(/[^\d]/g, "");
+    return d.length >= 9 && d.length <= 12;
+  }
+
+  function goto(n) {
+    document.querySelectorAll("#npc .npc-step").forEach(function (s) {
+      s.classList.toggle("on", +s.dataset.step === n);
+    });
+    postHeight();
+  }
+
+  $("npc-profiles").querySelectorAll(".npc-chip").forEach(function (ch) {
+    ch.addEventListener("click", function () {
+      $("npc-profiles").querySelectorAll(".npc-chip").forEach(function (c) { c.classList.remove("sel"); });
+      ch.classList.add("sel");
       profile = ch.dataset.v;
-      $('npc-teaser').textContent = MAP[profile].teaser;
-      setTimeout(function(){ goto(2); $('npc-email').focus(); }, 150);
+      $("npc-teaser").textContent = MAP[profile].teaser;
+      setTimeout(function () { goto(2); $("npc-email").focus(); }, 120);
     });
   });
-  $('npc-back').addEventListener('click', function(){ goto(1); });
 
-  [['npc-email','npc-e-email'],['npc-mobile','npc-e-mobile']].forEach(function(pair){
+  $("npc-back").addEventListener("click", function () { goto(1); });
+
+  [["npc-email", "npc-e-email"], ["npc-mobile", "npc-e-mobile"]].forEach(function (pair) {
     var f = pair[0], e = pair[1];
-    $(f).addEventListener('input', function(){
-      $(f).classList.remove('bad');
-      $(e).classList.remove('on');
+    $(f).addEventListener("input", function () {
+      $(f).classList.remove("bad");
+      $(e).classList.remove("on");
     });
-    $(f).addEventListener('keydown', function(ev){
-      if (ev.key === 'Enter') $('npc-submit').click();
+    $(f).addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") $("npc-submit").click();
     });
   });
 
-  $('npc-submit').addEventListener('click', function(){
+  $("npc-submit").addEventListener("click", function () {
     if (!profile) { goto(1); return; }
 
-    var em = $('npc-email').value.trim();
-    var mo = $('npc-mobile').value.trim();
+    var em = $("npc-email").value.trim();
+    var mo = $("npc-mobile").value.trim();
     var bad = false;
 
-    if (!emailOk(em)) { $('npc-email').classList.add('bad'); $('npc-e-email').classList.add('on'); bad = true; }
-    if (!mobileOk(mo)) { $('npc-mobile').classList.add('bad'); $('npc-e-mobile').classList.add('on'); bad = true; }
+    if (!emailOk(em)) { $("npc-email").classList.add("bad"); $("npc-e-email").classList.add("on"); bad = true; }
+    if (!mobileOk(mo)) { $("npc-mobile").classList.add("bad"); $("npc-e-mobile").classList.add("on"); bad = true; }
     if (bad) {
-      ($('npc-email').classList.contains('bad') ? $('npc-email') : $('npc-mobile')).focus();
+      ($("npc-email").classList.contains("bad") ? $("npc-email") : $("npc-mobile")).focus();
+      postHeight();
       return;
     }
 
     var m = MAP[profile];
-    var btn = $('npc-submit');
+    var btn = $("npc-submit");
     btn.disabled = true;
-    btn.textContent = 'Booking...';
+    btn.textContent = "Booking...";
 
     var payload = {
       lead: {
         email: em,
         mobile: mo,
-        status: 'new',
+        phone: mo,
+        source: LEAD_SOURCE,
+        status: "new",
         service_interest: m.svc,
         lead_score: m.base,
         callback_requested: true,
+        marketing_optin: true,
+        consent: { email: true, sms: true, whatsapp: false },
         quiz_answers: { profile: profile, review_focus: m.focus }
       },
       touchpoint: {
-        channel: 'website_popup',
-        source: 'free_15min_call',
+        channel: "free_15min_call",
+        source: LEAD_SOURCE,
         page: parentPage(),
-        article_title: parentTitle(),
+        article_title: null,
         captured_at: new Date().toISOString()
-      }
+      },
+      source: LEAD_SOURCE
     };
 
-    submitLead(payload).then(function(){
-      $('npc-form').style.display = 'none';
-      $('npc-done').classList.add('on');
-      if (!isOverlay) notifyResize();
-      /* brief success view, then tell parent to tear down + mark captured */
-      setTimeout(function(){ notifyParent('npc-captured'); }, 2800);
-    }).catch(function(){
-      btn.disabled = false;
-      btn.textContent = 'Book my free 15 minutes';
-    });
+    fetch(LEAD_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        return res.json().then(function (body) {
+          if (!res.ok || body.success === false) {
+            throw new Error((body && body.message) || "Submission failed");
+          }
+          return body;
+        });
+      })
+      .then(function () {
+        $("npc-form").style.display = "none";
+        $("npc-done").classList.add("on");
+        postHeight();
+        if (isOverlay) {
+          try {
+            window.parent.postMessage({ type: "npc-captured", source: "nanak-free-15min" }, "*");
+          } catch (e) {}
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = "Book my free 15 minutes";
+        postHeight();
+      });
   });
 
-  function close(){
-    notifyParent('npc-close');
+  if (isOverlay) {
+    $("npc-x").addEventListener("click", function () {
+      try { window.parent.postMessage({ type: "npc-close", source: "nanak-free-15min" }, "*"); } catch (e) {}
+    });
+    $("npc-bg").addEventListener("click", function (e) {
+      if (e.target === $("npc-bg")) {
+        try { window.parent.postMessage({ type: "npc-close", source: "nanak-free-15min" }, "*"); } catch (err) {}
+      }
+    });
   }
 
-  if (isOverlay) {
-    $('npc-x').addEventListener('click', close);
-    $('npc-bg').addEventListener('click', function(e){
-      if (e.target === $('npc-bg')) close();
-    });
-    document.addEventListener('keydown', function(e){
-      if (e.key === 'Escape') close();
-    });
-  } else {
-    notifyResize();
-    window.addEventListener('load', notifyResize);
-    if (typeof ResizeObserver !== 'undefined') {
-      try {
-        new ResizeObserver(notifyResize).observe(document.getElementById('npc') || document.body);
-      } catch (e) {}
-    }
+  if (typeof ResizeObserver !== "undefined") {
+    try { new ResizeObserver(postHeight).observe($("npc")); } catch (e) {}
   }
+  window.addEventListener("load", postHeight);
+  window.addEventListener("resize", postHeight);
+  postHeight();
+  setTimeout(postHeight, 50);
+  setTimeout(postHeight, 250);
 })();
 </script>
-<!-- universal WP iframe height -->
 <script src="./nanak-embed-child-resize.js" defer></script>
 </body>
 </html>
