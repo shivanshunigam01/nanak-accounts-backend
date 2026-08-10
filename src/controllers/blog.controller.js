@@ -173,7 +173,6 @@ exports.submitQuizLead = async (req, res) => {
           article_title: tp.articleTitle,
           captured_at: tp.capturedAt,
         },
-        source: "blog_card",
       });
       crmLead = result.lead;
     } catch (e) {

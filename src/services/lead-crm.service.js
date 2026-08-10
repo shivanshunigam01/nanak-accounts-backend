@@ -18,6 +18,7 @@ const SRC_LABEL = {
   pay_calculator: "Pay calculator",
   contact_us: "Contact us",
   free_15min_call: "Free 15-min call",
+  manual: "Staff entry",
   google_ads: "Google Ads",
   meta_ads: "Meta Ads",
   phone: "Phone call",
@@ -45,7 +46,7 @@ function scoreFor(src, svc, cb) {
   let s = base;
   if (cb) s += 15;
   if (src === "referral") s += 15;
-  if (src === "walk_in" || src === "phone") s += 10;
+  if (src === "walk_in" || src === "phone" || src === "manual") s += 10;
   if (src === "newsletter") s -= 30;
   if (src === "blog" || src === "blog_card") s += 10;
   if (src === "contact_us") s += 12;
@@ -56,9 +57,10 @@ function scoreFor(src, svc, cb) {
 
 /** Map legacy touchpoint / payload → CRM source key */
 function mapSource({ source, channel, explicit }) {
+  const ch = String(channel || "").toLowerCase();
+  if (ch === "manual") return "manual";
   if (explicit && SRC_LABEL[explicit]) return explicit;
   const src = String(source || "").toLowerCase();
-  const ch = String(channel || "").toLowerCase();
   if (src === "newsletter_signup" || src === "newsletter") return "newsletter";
   if (src === "income_tax_calculator" || src === "income-tax-calculator") return "income_tax_calculator";
   if (src === "pay_calculator" || src === "pay-calculator") return "pay_calculator";
@@ -73,7 +75,8 @@ function mapSource({ source, channel, explicit }) {
     return "free_15min_call";
   }
   if (src === "blog" || src === "blog_sidebar" || ch === "blog_sidebar") return "blog";
-  if (ch === "blog" || src === "blog_card") return "blog_card";
+  if (src === "blog_card") return "blog_card";
+  if (ch === "blog" && !src) return "blog_card";
   if (src.startsWith("tax_check")) return "tax_check";
   if (SRC_LABEL[src]) return src;
   return "popup";

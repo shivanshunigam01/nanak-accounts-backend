@@ -14,6 +14,7 @@ const LEAD_SOURCES = [
   "pay_calculator",
   "contact_us",
   "free_15min_call",
+  "manual",
   "google_ads",
   "meta_ads",
   "phone",

@@ -165,23 +165,25 @@ exports.createManual = async (req, res) => {
     if (!email || !EMAIL_RE.test(email)) {
       return res.status(400).json({ success: false, message: "Valid email required" });
     }
+    const intake = String(body.intakeType || body.intake_type || "").trim();
+    const intakeLabel = intake && leadCrm.SRC_LABEL?.[intake] ? leadCrm.SRC_LABEL[intake] : intake;
     const result = await leadCrm.capture({
       lead: {
         name: body.name,
         email,
         mobile: body.mobile,
         service_interest: body.serviceInterest || body.service_interest,
-        source: body.source || "phone",
+        source: "manual",
         city: body.city,
         callback_requested: body.callbackRequested,
+        admin_notes: intakeLabel ? `Intake: ${intakeLabel}` : "",
         consent: body.consent || { email: true, sms: !!body.mobile, whatsapp: false },
       },
       touchpoint: {
         channel: "manual",
-        source: body.source || "phone",
+        source: "manual",
         page: "/admin/lead-crm",
       },
-      source: body.source || "phone",
     });
     return res.status(201).json({ success: true, data: result.lead });
   } catch (err) {
