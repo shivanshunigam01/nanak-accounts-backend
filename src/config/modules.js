@@ -496,6 +496,37 @@ function serializeUserAccess(user) {
   };
 }
 
+/** UI roles: legacy `admin` is treated as `owner`. */
+function normalizeTeamRole(role) {
+  if (role === 'admin' || role === 'owner') return 'owner';
+  if (role === 'manager') return 'manager';
+  return 'staff';
+}
+
+/**
+ * Reset one user document to the NANAK Owner / Manager / Staff matrix for their role.
+ * Preserves amlOfficer and payrollAccess flags. Migrates legacy admin → owner.
+ */
+function applyRoleDefaultsToUser(user) {
+  const amlOfficer = !!user.amlOfficer;
+  const payrollAccess = !!user.payrollAccess;
+  user.role = normalizeTeamRole(user.role);
+
+  if (isFullAccessRole(user.role)) {
+    user.moduleAccess = null;
+    user.permissions = null;
+    user.leadScope = 'all';
+  } else {
+    user.moduleAccess = normalizeIncomingAccess(user.role, null, { amlOfficer, payrollAccess });
+    user.permissions = null;
+    user.leadScope = defaultLeadScope(user.role);
+  }
+
+  user.amlOfficer = amlOfficer;
+  user.payrollAccess = payrollAccess;
+  return user;
+}
+
 module.exports = {
   LEVELS,
   RANK,
@@ -524,6 +555,8 @@ module.exports = {
   normalizeIncomingAccess,
   sanitizeModulePermissions,
   serializeUserAccess,
+  normalizeTeamRole,
+  applyRoleDefaultsToUser,
   enforceParentChild,
   applyCeilings,
   applySpecialFlags,

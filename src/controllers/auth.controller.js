@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const User = require('../models/User');
 const { asyncHandler } = require('../middleware/asyncHandler');
-const { serializeUserAccess, defaultLeadScope } = require('../config/modules');
+const { serializeUserAccess, defaultLeadScope, normalizeTeamRole } = require('../config/modules');
 
 function signToken(userId) {
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
@@ -15,7 +15,7 @@ function userPayload(user) {
     _id: user._id,
     name: user.name,
     email: user.email,
-    role: user.role,
+    role: normalizeTeamRole(user.role),
     active: user.active,
     avatar: user.avatar,
     lastLoginAt: user.lastLoginAt || null,

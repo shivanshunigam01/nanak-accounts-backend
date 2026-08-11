@@ -10,6 +10,8 @@ const {
   isFullAccessRole,
   effectiveAccess,
   compactModuleAccess,
+  normalizeTeamRole,
+  applyRoleDefaultsToUser,
 } = require('../../config/modules');
 
 function memberPayload(member, assignedCount = 0) {
@@ -18,7 +20,7 @@ function memberPayload(member, assignedCount = 0) {
     _id: member._id,
     name: member.name,
     email: member.email,
-    role: member.role,
+    role: normalizeTeamRole(member.role),
     active: member.active,
     avatar: member.avatar || null,
     moduleAccess: access.moduleAccess,
@@ -82,7 +84,7 @@ const listTeam = asyncHandler(async (_req, res) => {
 const createValidators = [
   body('name').isString().notEmpty(),
   body('email').isEmail().normalizeEmail(),
-  body('role').isIn(['admin', 'owner', 'manager', 'staff']),
+  body('role').customSanitizer(normalizeTeamRole).isIn(['owner', 'manager', 'staff']),
   body('password').isString().isLength({ min: 6 }),
   body('moduleAccess').optional({ nullable: true }).isObject(),
   body('permissions').optional({ nullable: true }),
@@ -141,7 +143,7 @@ const createMember = asyncHandler(async (req, res) => {
 const updateValidators = [
   param('id').isString().notEmpty(),
   body('name').optional().isString(),
-  body('role').optional().isIn(['admin', 'owner', 'manager', 'staff']),
+  body('role').optional().customSanitizer(normalizeTeamRole).isIn(['owner', 'manager', 'staff']),
   body('active').optional().isBoolean(),
   body('password').optional().isString().isLength({ min: 6 }),
   body('moduleAccess').optional({ nullable: true }).isObject(),
@@ -267,11 +269,44 @@ const deleteMember = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Member removed' });
 });
 
+/** Apply Excel role-matrix defaults to every team member (owner only). */
+const applyRoleDefaults = asyncHandler(async (req, res) => {
+  if (!isFullAccessRole(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Owner access required' });
+  }
+
+  const users = await User.find({
+    role: { $in: ['admin', 'owner', 'manager', 'staff'] },
+  });
+
+  const members = [];
+  for (const user of users) {
+    const beforeRole = user.role;
+    applyRoleDefaultsToUser(user);
+    await user.save({ validateBeforeSave: false });
+    await writeAccessAudit(req.user, user, 'apply_role_defaults', {
+      role: { from: beforeRole, to: user.role },
+    });
+    members.push({
+      email: user.email,
+      role: normalizeTeamRole(user.role),
+      leadScope: user.leadScope,
+    });
+  }
+
+  res.json({
+    success: true,
+    updated: members.length,
+    members,
+  });
+});
+
 module.exports = {
   listTeam,
   createMember,
   updateMember,
   deleteMember,
+  applyRoleDefaults,
   createValidators,
   updateValidators,
   deleteValidators,
