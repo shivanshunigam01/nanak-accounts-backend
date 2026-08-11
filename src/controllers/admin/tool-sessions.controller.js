@@ -1,6 +1,7 @@
 const { body, param, query } = require('express-validator');
 const ToolSession = require('../../models/ToolSession');
 const { asyncHandler } = require('../../middleware/asyncHandler');
+const { isFullAccessRole } = require('../../config/modules');
 const { getPagination } = require('../../utils/pagination');
 
 const TOOLS = ['ato-benchmark', 'deduction'];
@@ -73,7 +74,7 @@ const deleteSession = asyncHandler(async (req, res) => {
   }
   // Staff may only delete their own saved sessions; admins can delete any.
   const isOwner = session.createdBy && String(session.createdBy) === String(req.user._id);
-  if (req.user.role !== 'admin' && !isOwner) {
+  if (!isFullAccessRole(req.user.role) && !isOwner) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
   await session.deleteOne();

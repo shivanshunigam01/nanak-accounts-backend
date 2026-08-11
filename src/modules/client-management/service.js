@@ -5,6 +5,7 @@ const PracticePayrollOverride = require('../../models/PracticePayrollOverride');
 const PracticePeriod = require('../../models/PracticePeriod');
 const ClientPeriodStatus = require('../../models/ClientPeriodStatus');
 const User = require('../../models/User');
+const { isFullAccessRole } = require('../../config/modules');
 const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO, parseFlexibleDate } = require('./dates');
 const {
   buildRunsForClients,
@@ -488,7 +489,7 @@ function applyLifecycleChange(user, c, body, today, who) {
   const current = c.status || 'Active';
   if (next === current) return;
 
-  if (user.role !== 'admin') {
+  if (!isFullAccessRole(user.role)) {
     const err = new Error('Only admin can make a client inactive or reactivate them');
     err.status = 403;
     throw err;
@@ -1709,7 +1710,7 @@ async function renameGroup(user, groupId, body) {
 
 /** Admin: link related clients into a group (creates group if host has none). */
 async function linkGroup(user, body) {
-  if (user.role !== 'admin') {
+  if (!isFullAccessRole(user.role)) {
     const err = new Error('Only admin can manage relationships');
     err.status = 403;
     throw err;
@@ -1798,7 +1799,7 @@ async function linkGroup(user, body) {
  * or { groupId, managerId } reassigns the whole group.
  */
 async function consolidateGroup(user, body) {
-  if (user.role !== 'admin') {
+  if (!isFullAccessRole(user.role)) {
     const err = new Error('Only admin can consolidate group managers');
     err.status = 403;
     throw err;
@@ -2559,7 +2560,7 @@ async function exportReminders(user, body) {
 }
 
 async function startFY(user, body) {
-  if (!isFirmRole(user) || user.role !== 'admin') {
+  if (!isFirmRole(user) || !isFullAccessRole(user.role)) {
     const err = new Error('Admin only');
     err.status = 403;
     throw err;
@@ -2635,7 +2636,7 @@ async function unlockCmPeriod(user, id) {
 }
 
 async function updateCmPeriod(user, id, body) {
-  if (user.role !== 'admin') {
+  if (!isFullAccessRole(user.role)) {
     const err = new Error('Admin only');
     err.status = 403;
     throw err;

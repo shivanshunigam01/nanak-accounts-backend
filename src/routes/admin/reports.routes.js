@@ -4,7 +4,7 @@ const { requireRole } = require('../../middleware/roles');
 const { summary, conversionFunnel, staffWorkload, servicePopularity } = require('../../controllers/admin/reports.controller');
 
 router.use(protect);
-router.use(requireRole('admin', 'manager','staff'));
+router.use(requireRole('admin', 'owner', 'manager', 'staff'));
 
 router.get('/summary', summary);
 router.get('/conversion-funnel', conversionFunnel);

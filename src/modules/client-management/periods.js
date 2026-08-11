@@ -2,6 +2,7 @@ const PracticeClient = require('../../models/PracticeClient');
 const PracticePeriod = require('../../models/PracticePeriod');
 const ClientPeriodStatus = require('../../models/ClientPeriodStatus');
 const PracticeSettings = require('../../models/PracticeSettings');
+const { isFullAccessRole } = require('../../config/modules');
 const { MN, dayDiff } = require('./dates');
 
 const QKEYS = ['q1', 'q2', 'q3', 'q4'];
@@ -517,7 +518,7 @@ async function updateClientPeriods({ client, settings, body, today }) {
 }
 
 async function lockPeriod(user, id, confirm, today) {
-  if (user.role !== 'admin') {
+  if (!isFullAccessRole(user.role)) {
     const err = new Error('Admin only');
     err.status = 403;
     throw err;
@@ -578,7 +579,7 @@ async function lockPeriod(user, id, confirm, today) {
 }
 
 async function unlockPeriod(user, id, today) {
-  if (user.role !== 'admin') {
+  if (!isFullAccessRole(user.role)) {
     const err = new Error('Admin only');
     err.status = 403;
     throw err;

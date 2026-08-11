@@ -1,4 +1,5 @@
 const { asyncHandler } = require('../middleware/asyncHandler');
+const { isFullAccessRole } = require('../config/modules');
 const { getPagination } = require('../utils/pagination');
 const svc = require('../modules/sales-commission/service');
 const { runAcceptanceTests } = require('../modules/sales-commission/acceptance');
@@ -215,7 +216,7 @@ exports.preview = asyncHandler(async (req, res) => {
 });
 
 exports.runAcceptance = asyncHandler(async (req, res) => {
-  if (req.user.role !== 'admin') {
+  if (!isFullAccessRole(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Admin only' });
   }
   const result = await runAcceptanceTests();

@@ -1,4 +1,5 @@
 const { asyncHandler } = require('../middleware/asyncHandler');
+const { isFullAccessRole } = require('../config/modules');
 const svc = require('../modules/client-management/service');
 const { seedClientManagement, clearClientManagement } = require('../seeds/clientManagement.seed');
 
@@ -173,7 +174,7 @@ exports.exportClients = asyncHandler(async (req, res) => {
 });
 
 exports.seed = asyncHandler(async (req, res) => {
-  if (req.user.role !== 'admin') {
+  if (!isFullAccessRole(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Admin only' });
   }
   const data = await seedClientManagement({ force: !!req.body?.force });
@@ -181,7 +182,7 @@ exports.seed = asyncHandler(async (req, res) => {
 });
 
 exports.clearSeed = asyncHandler(async (req, res) => {
-  if (req.user.role !== 'admin') {
+  if (!isFullAccessRole(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Admin only' });
   }
   const data = await clearClientManagement();

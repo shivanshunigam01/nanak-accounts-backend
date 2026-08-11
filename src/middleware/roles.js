@@ -2,12 +2,22 @@ const {
   effectiveModules,
   hasModuleLevel,
   getModuleLevel,
+  isFullAccessRole,
 } = require('../config/modules');
+
+function roleAllowed(userRole, allowed) {
+  if (allowed.includes(userRole)) return true;
+  // Owner and legacy admin are interchangeable when either is permitted.
+  if (isFullAccessRole(userRole) && allowed.some((r) => isFullAccessRole(r))) {
+    return true;
+  }
+  return false;
+}
 
 function requireRole(...allowed) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    if (!allowed.includes(req.user.role)) {
+    if (!roleAllowed(req.user.role, allowed)) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
     next();

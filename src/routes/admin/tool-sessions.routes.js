@@ -14,7 +14,7 @@ const {
 } = require('../../controllers/admin/tool-sessions.controller');
 
 router.use(protect);
-router.use(requireRole('admin', 'manager', 'staff'));
+router.use(requireRole('admin', 'owner', 'manager', 'staff'));
 
 router.get('/', listValidators, validate, listSessions);
 router.get('/:id', getValidators, validate, getSession);

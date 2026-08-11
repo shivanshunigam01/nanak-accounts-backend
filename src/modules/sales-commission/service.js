@@ -12,6 +12,7 @@ const SalesCommissionPlan = require('../../models/SalesCommissionPlan');
 const SalesTarget = require('../../models/SalesTarget');
 const SalesSettings = require('../../models/SalesSettings');
 const SalesAuditLog = require('../../models/SalesAuditLog');
+const { isFullAccessRole } = require('../../config/modules');
 const ENG = require('./engine');
 const {
   todayISO,
@@ -340,7 +341,7 @@ async function verifyPayment(actor, paymentId) {
   if (!payment) throw Object.assign(new Error('Payment not found'), { status: 404 });
   const deal = await SalesDeal.findById(payment.dealId);
   if (!deal) throw Object.assign(new Error('Deal not found'), { status: 404 });
-  if (String(deal.ownerId) === String(actor._id) && actor.role !== 'admin') {
+  if (String(deal.ownerId) === String(actor._id) && !isFullAccessRole(actor.role)) {
     throw Object.assign(new Error('Cannot verify your own deal'), { status: 403 });
   }
   await assertCanSeeUser(actor, deal.ownerId);
@@ -562,7 +563,7 @@ async function cancelDeal(actor, dealId, { cancelDate, reason }) {
 }
 
 async function voidDeal(actor, dealId, reason) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   const deal = await SalesDeal.findById(dealId);
   if (!deal) throw Object.assign(new Error('Deal not found'), { status: 404 });
   deal.voided = true;
@@ -883,7 +884,7 @@ async function listTargets(actor, { page, limit, skip }) {
 }
 
 async function setTarget(actor, body) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   const settings = await getSettings();
   const fy = body.fy || settings.reportFY;
   const amountCents = Math.round(Number(body.amountCents ?? body.amount * 100));
@@ -926,7 +927,7 @@ async function listClawbacks(actor, { page, limit, skip }) {
 }
 
 async function waiveClawback(actor, id, { waiveCents, reason }) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   if (!reason) throw Object.assign(new Error('Reason required'), { status: 400 });
   const c = await SalesClawbackCase.findById(id);
   if (!c) throw Object.assign(new Error('Not found'), { status: 404 });
@@ -1002,7 +1003,7 @@ async function getBatch(actor, id, { page = 1, limit = 20, skip = 0 } = {}) {
 }
 
 async function createBatch(actor, periodId) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   const settings = await getSettings();
   const today = todayISO(settings.demoToday);
   const periods = periodsForFY(settings.reportFY, settings.payoutFrequency);
@@ -1079,7 +1080,7 @@ async function createBatch(actor, periodId) {
 }
 
 async function advanceBatch(actor, id, body = {}) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   const batch = await SalesPayoutBatch.findById(id);
   if (!batch) throw Object.assign(new Error('Not found'), { status: 404 });
   if (['paid', 'locked'].includes(batch.state)) {
@@ -1271,7 +1272,7 @@ async function getBadges(actor) {
 }
 
 async function getSettingsDto(actor) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   const settings = await getSettings();
   const plans = await SalesCommissionPlan.find().sort({ effectiveDate: -1 });
   const users = await User.find({
@@ -1281,7 +1282,7 @@ async function getSettingsDto(actor) {
 }
 
 async function updateSettings(actor, body) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   const settings = await getSettings();
   const fields = [
     'retentionDays',
@@ -1301,7 +1302,7 @@ async function updateSettings(actor, body) {
 }
 
 async function addRate(actor, body) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   if (!body.reason || !body.effectiveDate || body.rate == null) {
     throw Object.assign(new Error('rate, effectiveDate and reason required'), { status: 400 });
   }
@@ -1318,7 +1319,7 @@ async function addRate(actor, body) {
 }
 
 async function listAudit(actor, { page, limit, skip }) {
-  if (actor.role !== 'admin') throw Object.assign(new Error('Admin only'), { status: 403 });
+  if (!isFullAccessRole(actor.role)) throw Object.assign(new Error('Admin only'), { status: 403 });
   const [total, items] = await Promise.all([
     SalesAuditLog.countDocuments(),
     SalesAuditLog.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
