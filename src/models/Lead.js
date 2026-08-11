@@ -12,6 +12,11 @@ const LEAD_SOURCES = [
   "tax_check",
   "income_tax_calculator",
   "pay_calculator",
+  "pr_points_calculator",
+  "visa_fees_calculator",
+  "pathway_assessment",
+  "migration_contact",
+  "book_consultation",
   "contact_us",
   "free_15min_call",
   "manual",
@@ -30,6 +35,7 @@ const SERVICES = [
   "business_advisory",
   "property_tax",
   "smsf",
+  "migration",
 ];
 
 const leadLogSchema = new mongoose.Schema(

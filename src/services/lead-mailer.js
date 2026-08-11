@@ -31,6 +31,7 @@ const SVC_LABEL = {
   business_advisory: "Business advisory",
   property_tax: "Property & CGT",
   smsf: "SMSF",
+  migration: "Migration",
 };
 
 function fromAddress() {

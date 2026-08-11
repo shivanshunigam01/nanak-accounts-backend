@@ -16,6 +16,11 @@ const SRC_LABEL = {
   tax_check: "Tax check",
   income_tax_calculator: "Income tax calculator",
   pay_calculator: "Pay calculator",
+  pr_points_calculator: "PR points calculator",
+  visa_fees_calculator: "Visa fees calculator",
+  pathway_assessment: "Pathway assessment",
+  migration_contact: "Migration contact",
+  book_consultation: "Book consultation",
   contact_us: "Contact us",
   free_15min_call: "Free 15-min call",
   manual: "Staff entry",
@@ -42,6 +47,7 @@ function scoreFor(src, svc, cb) {
     property_tax: 68,
     business_tax: 65,
     individual_tax: 52,
+    migration: 70,
   }[svc] || 52;
   let s = base;
   if (cb) s += 15;
@@ -49,9 +55,17 @@ function scoreFor(src, svc, cb) {
   if (src === "walk_in" || src === "phone" || src === "manual") s += 10;
   if (src === "newsletter") s -= 30;
   if (src === "blog" || src === "blog_card") s += 10;
-  if (src === "contact_us") s += 12;
-  if (src === "free_15min_call" || src === "popup") s += 14;
-  if (src === "income_tax_calculator" || src === "pay_calculator") s += 8;
+  if (src === "contact_us" || src === "migration_contact") s += 12;
+  if (src === "free_15min_call" || src === "popup" || src === "book_consultation") s += 14;
+  if (
+    src === "income_tax_calculator" ||
+    src === "pay_calculator" ||
+    src === "pr_points_calculator" ||
+    src === "visa_fees_calculator" ||
+    src === "pathway_assessment"
+  ) {
+    s += 8;
+  }
   return Math.max(15, Math.min(100, s));
 }
 
@@ -64,6 +78,11 @@ function mapSource({ source, channel, explicit }) {
   if (src === "newsletter_signup" || src === "newsletter") return "newsletter";
   if (src === "income_tax_calculator" || src === "income-tax-calculator") return "income_tax_calculator";
   if (src === "pay_calculator" || src === "pay-calculator") return "pay_calculator";
+  if (src === "pr_points_calculator" || src === "pr-points-calculator") return "pr_points_calculator";
+  if (src === "visa_fees_calculator" || src === "visa-fees-calculator") return "visa_fees_calculator";
+  if (src === "pathway_assessment" || src === "pathway-assessment") return "pathway_assessment";
+  if (src === "migration_contact" || src === "migration-contact") return "migration_contact";
+  if (src === "book_consultation" || src === "book-consultation") return "book_consultation";
   if (src === "contact_us" || src === "contact-us" || src === "contactus" || ch === "contact_us") return "contact_us";
   if (
     src === "free_15min_call" ||
@@ -237,9 +256,14 @@ async function capture(raw = {}) {
   const callbackRequested = Boolean(
     leadIn.callback_requested ?? leadIn.callbackRequested
   );
-  const serviceInterest = String(
+  const SERVICES = Lead.SERVICES || require("../models/Lead").SERVICES || [];
+  let serviceInterest = String(
     leadIn.service_interest || leadIn.serviceInterest || "individual_tax"
   ).trim() || "individual_tax";
+  if (SERVICES.length && !SERVICES.includes(serviceInterest)) {
+    serviceInterest = serviceInterest === "migration" ? "migration" : "individual_tax";
+    if (!SERVICES.includes(serviceInterest)) serviceInterest = "individual_tax";
+  }
 
   const source = mapSource({
     source: touchpoint.source || leadIn.source,

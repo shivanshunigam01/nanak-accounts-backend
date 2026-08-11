@@ -94,6 +94,7 @@ app.use(
       "https://www.loveable.app",
       "http://localhost:8081",
       "http://localhost:5173",
+      "http://localhost:5174",
       "https://loveable.com","loveableproject.com","https://loveableproject.com","https://www.loveableproject.com",".loveableproject.com",
       "https://online.nanakaccountants.com.au",
       "http://online.nanakaccountants.com.au",
@@ -103,6 +104,10 @@ app.use(
       "https://www.nanakaccountants.com.au",
       "http://nanakaccountants.com.au",
       "http://www.nanakaccountants.com.au",
+      "https://nanakmigration.com.au",
+      "https://www.nanakmigration.com.au",
+      "http://nanakmigration.com.au",
+      "http://www.nanakmigration.com.au",
     ],
     credentials: true,
   })
@@ -167,6 +172,8 @@ app.use('/api/admin/command-centre', require('./routes/admin/commandCentre.route
 app.use('/api/admin/submissions', submissionsRoutes);
 app.use('/api/admin/team', teamRoutes);
 app.use('/api/admin/quote-pad', quotePadRoutes);
+app.use('/api/admin/migration-rates', require('./routes/admin/migration-rates.routes'));
+app.use('/api/public/migration-rates', require('./routes/public-migration-rates.routes'));
 app.use('/api/admin/sales-commission', salesCommissionRoutes);
 app.use('/api/admin/client-management', clientManagementRoutes);
 app.use('/api/admin/reports', reportsRoutes);
