@@ -60,7 +60,7 @@ async function indiaStaffUsers() {
 }
 
 async function visibleUserIds(actor) {
-  if (actor.role === 'admin') return null; // all
+  if ((actor.role === 'admin' || actor.role === 'owner')) return null; // all
   if (actor.role === 'manager') {
     const team = await User.find({ managerId: actor._id, active: true }).select('_id');
     return [String(actor._id), ...team.map((t) => String(t._id))];
@@ -69,7 +69,7 @@ async function visibleUserIds(actor) {
 }
 
 function canSeeUser(actor, targetId, visibleIds) {
-  if (actor.role === 'admin') return true;
+  if ((actor.role === 'admin' || actor.role === 'owner')) return true;
   if (!visibleIds) return true;
   return visibleIds.includes(String(targetId));
 }
@@ -333,7 +333,7 @@ async function addPayment(actor, dealId, body) {
 }
 
 async function verifyPayment(actor, paymentId) {
-  if (!['manager', 'admin'].includes(actor.role)) {
+  if (!['manager', 'admin', 'owner'].includes(actor.role)) {
     throw Object.assign(new Error('Only managers/admins can verify'), { status: 403 });
   }
   const payment = await SalesPayment.findById(paymentId);
@@ -405,7 +405,7 @@ async function verifyPayment(actor, paymentId) {
 }
 
 async function rejectPayment(actor, paymentId, reason) {
-  if (!['manager', 'admin'].includes(actor.role)) {
+  if (!['manager', 'admin', 'owner'].includes(actor.role)) {
     throw Object.assign(new Error('Forbidden'), { status: 403 });
   }
   if (!reason) throw Object.assign(new Error('Reason required'), { status: 400 });
@@ -452,7 +452,7 @@ async function isBatchOpen(batchId) {
 }
 
 async function refundPayment(actor, paymentId, reason) {
-  if (!['manager', 'admin'].includes(actor.role)) {
+  if (!['manager', 'admin', 'owner'].includes(actor.role)) {
     throw Object.assign(new Error('Forbidden'), { status: 403 });
   }
   const payment = await SalesPayment.findById(paymentId);
@@ -489,7 +489,7 @@ async function refundPayment(actor, paymentId, reason) {
 }
 
 async function cancelDeal(actor, dealId, { cancelDate, reason }) {
-  if (!['manager', 'admin'].includes(actor.role)) {
+  if (!['manager', 'admin', 'owner'].includes(actor.role)) {
     throw Object.assign(new Error('Forbidden'), { status: 403 });
   }
   const deal = await SalesDeal.findById(dealId);
@@ -661,7 +661,7 @@ async function buildLedgerRows(userId, settings) {
 async function getLedger(actor, { staffId, page, limit, skip }) {
   const settings = await getSettings();
   let userId = await resolveScopedUserId(actor, staffId);
-  if (!userId && actor.role === 'admin' && !staffId) {
+  if (!userId && (actor.role === 'admin' || actor.role === 'owner') && !staffId) {
     // Admin "all" — flatten recent across staff, still paginated
     const entries = await SalesLedgerEntry.find({ cancelled: false })
       .sort({ ts: -1 })
@@ -963,7 +963,7 @@ async function waiveClawback(actor, id, { waiveCents, reason }) {
 }
 
 async function listBatches(actor) {
-  if (!['manager', 'admin'].includes(actor.role)) {
+  if (!['manager', 'admin', 'owner'].includes(actor.role)) {
     // staff: only see paid/locked items that include them
     const items = await SalesPayoutItem.find({ userId: actor._id });
     const batchIds = [...new Set(items.map((i) => String(i.batchId)))];
@@ -1219,7 +1219,7 @@ async function replyQuery(actor, id, body) {
     body: body.body,
     at: today,
   });
-  if (['manager', 'admin'].includes(actor.role)) {
+  if (['manager', 'admin', 'owner'].includes(actor.role)) {
     q.status = 'Admin responded';
     q.unreadForStaff = true;
     q.unreadForAdmin = false;
@@ -1233,7 +1233,7 @@ async function replyQuery(actor, id, body) {
 }
 
 async function resolveQuery(actor, id) {
-  if (!['manager', 'admin'].includes(actor.role)) {
+  if (!['manager', 'admin', 'owner'].includes(actor.role)) {
     throw Object.assign(new Error('Forbidden'), { status: 403 });
   }
   const q = await SalesCommissionQuery.findById(id);
@@ -1251,7 +1251,7 @@ async function getBadges(actor) {
   if (visible) dealFilter.ownerId = { $in: visible };
   const deals = await SalesDeal.find(dealFilter).select('_id');
   const pendingVerify =
-    ['manager', 'admin'].includes(actor.role)
+    ['manager', 'admin', 'owner'].includes(actor.role)
       ? await SalesPayment.countDocuments({
           dealId: { $in: deals.map((d) => d._id) },
           status: 'cleared',
@@ -1275,7 +1275,7 @@ async function getSettingsDto(actor) {
   const settings = await getSettings();
   const plans = await SalesCommissionPlan.find().sort({ effectiveDate: -1 });
   const users = await User.find({
-    $or: [{ commissionEligible: true }, { role: 'admin' }, { role: 'manager' }],
+    $or: [{ commissionEligible: true }, { role: 'admin' }, { role: 'owner' }, { role: 'manager' }],
   }).select('name email role office commissionEligible');
   return { settings, plans, users };
 }

@@ -118,7 +118,7 @@ exports.getLodgement = asyncHandler(async (req, res) => {
 });
 
 exports.getReminders = asyncHandler(async (req, res) => {
-  const data = await svc.getReminders(req.user);
+  const data = await svc.getReminders(req.user, req.query);
   res.json({ success: true, ...data });
 });
 

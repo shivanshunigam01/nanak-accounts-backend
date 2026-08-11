@@ -843,6 +843,7 @@ async function getMeta(user) {
     exitReasons: EXIT_REASONS,
     statuses: ['Active', 'Inactive'],
     reminderTemplate: settings.reminderTemplate,
+    remindersEnabled: settings.remindersEnabled !== false,
     onTimeThreshold: settings.onTimeThreshold,
     payrollRate: settings.payrollRate,
     feeReviewMonths: settings.feeReviewMonths,
@@ -1880,6 +1881,9 @@ async function getPayments(user, query = {}) {
   const allScoped = await scopeClients(user);
   const book = allScoped.filter(payTrack);
   const f = query.filter || 'all';
+  const exposureRows = exposure(allScoped, curQ);
+  const lodgedUnpaidIds = new Set(exposureRows.map((r) => r.clientId));
+  const lodgedUnpaidTotal = exposureRows.reduce((t, r) => t + (r.amt || 0), 0);
 
   let expected = 0;
   let collected = 0;
@@ -1911,6 +1915,7 @@ async function getPayments(user, query = {}) {
     if (f === 'due') return payStatus(c, curQ) === 'Due' || payStatus(c, curQ) === 'Not Paid';
     if (f === 'overdue') return overdueIds.has(String(c._id));
     if (f === 'unreconciled') return !c.recon?.[curQ];
+    if (f === 'lodged-unpaid') return lodgedUnpaidIds.has(String(c._id));
     return true;
   });
 
@@ -1946,6 +1951,9 @@ async function getPayments(user, query = {}) {
       staleFeeTotal: staleMonthly,
       packageMonthly,
       packageCount: book.length,
+      lodgedUnpaidCount: lodgedUnpaidIds.size,
+      lodgedUnpaidQuarters: exposureRows.length,
+      lodgedUnpaidTotal,
     },
     items: clients.slice(0, 80).map((c) => ({
       ...serializeClient(c),
@@ -1983,7 +1991,7 @@ async function getPayments(user, query = {}) {
       })),
     },
     stale: feeStale.slice(0, 40).map(serializeClient),
-    exposure: exposure(allScoped, curQ).slice(0, 40),
+    exposure: exposureRows.slice(0, 40),
   };
 }
 
@@ -2180,16 +2188,19 @@ async function updateCmSettings(user, body) {
   if (body.reminderTemplate !== undefined) {
     settings.reminderTemplate = String(body.reminderTemplate || '').trim() || settings.reminderTemplate;
   }
-  if (body.feeReviewMonths !== undefined && user.role === 'admin') {
+  if (body.remindersEnabled !== undefined) {
+    settings.remindersEnabled = Boolean(body.remindersEnabled);
+  }
+  if (body.feeReviewMonths !== undefined && isFullAccessUser(user)) {
     settings.feeReviewMonths = Number(body.feeReviewMonths) || settings.feeReviewMonths;
   }
-  if (body.payrollRate !== undefined && user.role === 'admin') {
+  if (body.payrollRate !== undefined && isFullAccessUser(user)) {
     settings.payrollRate = Number(body.payrollRate) || settings.payrollRate;
   }
-  if (body.onTimeThreshold !== undefined && user.role === 'admin') {
+  if (body.onTimeThreshold !== undefined && isFullAccessUser(user)) {
     settings.onTimeThreshold = Number(body.onTimeThreshold) || settings.onTimeThreshold;
   }
-  if (body.dueDateDefaults !== undefined && user.role === 'admin') {
+  if (body.dueDateDefaults !== undefined && isFullAccessUser(user)) {
     const incoming = body.dueDateDefaults || {};
     const next = { ...(settings.dueDateDefaults?.toObject?.() || settings.dueDateDefaults || {}) };
     for (const key of ['q1', 'q2', 'q3', 'q4', 'annual']) {
@@ -2476,16 +2487,26 @@ async function getLodgement(user) {
   };
 }
 
-async function getReminders(user) {
+async function getReminders(user, query = {}) {
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
   const curQL = curLabel(settings);
-  const clients = (await scopeClients(user)).filter(
-    (c) => c.gst && c.bas?.[curQ] === 'Not Completed'
-  );
+  const remindersEnabled = settings.remindersEnabled !== false;
+  const mode = query.mode === 'all' ? 'all' : 'due-gst';
+  let clients = [];
+  if (remindersEnabled) {
+    const scoped = await scopeClients(user);
+    clients =
+      mode === 'all'
+        ? scoped
+        : scoped.filter((c) => c.gst && c.bas?.[curQ] === 'Not Completed');
+  }
   return {
     currentQuarterLabel: curQL,
     template: settings.reminderTemplate,
+    remindersEnabled,
+    mode,
+    isFirm: isFirmRole(user),
     items: clients.map((c) => ({
       ...serializeClient(c),
       message: settings.reminderTemplate
@@ -2499,6 +2520,11 @@ async function getReminders(user) {
 
 async function exportReminders(user, body) {
   const settings = await getSettings();
+  if (settings.remindersEnabled === false) {
+    const err = new Error('Reminders are turned off');
+    err.status = 403;
+    throw err;
+  }
   const curQL = curLabel(settings);
   const today = dstr(todayFromSettings(settings));
   const ids = body.ids || [];

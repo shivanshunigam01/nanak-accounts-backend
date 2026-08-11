@@ -5,6 +5,7 @@
 
 const ROLE_ALIASES = {
   admin: 'admin',
+  owner: 'admin',
   manager: 'manager',
   staff: 'staff',
   analyst: 'staff',

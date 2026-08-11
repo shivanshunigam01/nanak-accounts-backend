@@ -14,13 +14,8 @@ const {
 function canAccessSubmission(user, submission) {
   if (!user) return false;
 
-  if (user.role === 'admin' || user.role === 'manager' || user.role === 'staff') return true;
-
-  if (user.role === 'staff') {
-    const assignedId =
-      submission.assignedTo?._id || submission.assignedTo;
-
-    return String(assignedId) === String(user._id);
+  if (user.role === 'admin' || user.role === 'owner' || user.role === 'manager' || user.role === 'staff') {
+    return true;
   }
 
   return false;
@@ -108,7 +103,7 @@ const assignSubmission = asyncHandler(async (req, res) => {
   const submission = await Submission.findById(req.params.id);
   if (!submission) return res.status(404).json({ success: false, message: 'Submission not found' });
 
-  if (!(req.user.role === 'admin' || req.user.role === 'manager')) {
+  if (!(req.user.role === 'admin' || req.user.role === 'owner' || req.user.role === 'manager')) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
 
@@ -228,7 +223,7 @@ const requestDocument = asyncHandler(async (req, res) => {
   const submission = await Submission.findById(req.params.id);
   if (!submission) return res.status(404).json({ success: false, message: 'Submission not found' });
 
-  if (!(req.user.role === 'admin' || req.user.role === 'manager' || canAccessSubmission(req.user, submission))) {
+  if (!(req.user.role === 'admin' || req.user.role === 'owner' || req.user.role === 'manager' || canAccessSubmission(req.user, submission))) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
 
@@ -269,7 +264,7 @@ const emailToStaff = asyncHandler(async (req, res) => {
   const submission = await Submission.findById(req.params.id);
   if (!submission) return res.status(404).json({ success: false, message: 'Submission not found' });
 
-  if (!(req.user.role === 'admin' || req.user.role === 'manager')) {
+  if (!(req.user.role === 'admin' || req.user.role === 'owner' || req.user.role === 'manager')) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
 
@@ -306,7 +301,7 @@ const updatePaymentStatus = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Submission not found' });
   }
 
-  if (!(req.user.role === 'admin' || req.user.role === 'manager' || req.user.role === 'staff')) {
+  if (!(req.user.role === 'admin' || req.user.role === 'owner' || req.user.role === 'manager' || req.user.role === 'staff')) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
 

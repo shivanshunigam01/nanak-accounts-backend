@@ -62,6 +62,7 @@ const practiceSettingsSchema = new mongoose.Schema(
       default:
         'Hi {name}, a friendly reminder from Nanak Accountants: your BAS for the {quarter} quarter is now due. Please send through your documents so we can lodge on time. Reply here or call your client manager.',
     },
+    remindersEnabled: { type: Boolean, default: true },
     onTimeThreshold: { type: Number, default: 85 },
     payrollRate: { type: Number, default: 25 },
     feeReviewMonths: { type: Number, default: 24 },
