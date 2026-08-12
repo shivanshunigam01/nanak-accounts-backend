@@ -5,7 +5,7 @@ const PracticePayrollOverride = require('../../models/PracticePayrollOverride');
 const PracticePeriod = require('../../models/PracticePeriod');
 const ClientPeriodStatus = require('../../models/ClientPeriodStatus');
 const User = require('../../models/User');
-const { isFullAccessRole } = require('../../config/modules');
+const { isFullAccessRole, hasModuleLevel } = require('../../config/modules');
 const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO, parseFlexibleDate } = require('./dates');
 const {
   buildRunsForClients,
@@ -14,6 +14,7 @@ const {
   stpBreaches,
   filterSuperRuns,
   superBucket,
+  sortSuperRuns,
 } = require('./payroll');
 const { addDays, dayDiff, dshort, WD } = require('./dates');
 const { migrateClientManagementV4 } = require('./migrateV4');
@@ -216,8 +217,14 @@ function pickBestUser(candidates) {
   return [...candidates].sort((a, b) => teamMemberScore(b) - teamMemberScore(a))[0];
 }
 
-/** Admin/owner can edit any client; staff/manager can edit only clients assigned to them. */
-function canEditClient(user, c) {
+/** Module edit/full on All Clients unlocks firm-wide client CRUD (assignment is display-only). */
+function canEditClient(user, _c) {
+  if (!user) return false;
+  return hasModuleLevel(user, 'cm-clients', 'edit');
+}
+
+/** Assignment helper for "mine" badges/filters — not used for write permission. */
+function isAssignedClient(user, c) {
   if (!user || !c) return false;
   if (isFullAccessUser(user)) return true;
   if (c.managerId && String(c.managerId) === String(user._id)) return true;
@@ -414,13 +421,22 @@ function payStatus(c, qKey) {
   return c.payq?.[qKey] || 'Not Paid';
 }
 
+/** Outstanding package fee for a quarter (Due / Not Paid / Part Paid). */
+function isPayOutstanding(st) {
+  return st === 'Not Paid' || st === 'Due' || st === 'Part Paid';
+}
+
+function isPayUnpaid(st) {
+  return st === 'Not Paid' || st === 'Due';
+}
+
 function payOwing(c, curQ) {
   if (!payTrack(c)) return 0;
   const ci = qIndex(curQ);
   let owe = 0;
   for (let i = 0; i <= ci; i++) {
-    const st = c.payq?.[QKEYS[i]];
-    if (st === 'Not Paid') owe += payExpected(c);
+    const st = payStatus(c, QKEYS[i]);
+    if (isPayUnpaid(st)) owe += payExpected(c);
     else if (st === 'Part Paid') owe += Math.round(payExpected(c) / 2);
   }
   return owe;
@@ -447,8 +463,8 @@ function exposure(list, curQ) {
     for (let i = 0; i <= ci; i++) {
       const qk = QKEYS[i];
       const st = c.bas?.[qk];
-      const pay = c.payq?.[qk];
-      if (st === 'Completed' && pay && pay !== 'Paid') {
+      const pay = payStatus(c, qk);
+      if (st === 'Completed' && isPayOutstanding(pay)) {
         const amt = pay === 'Part Paid' ? Math.round(payExpected(c) / 2) : payExpected(c);
         out.push({
           clientId: String(c._id),
@@ -802,9 +818,23 @@ async function loadRuns(clients, settings) {
   return { runs: buildRunsForClients(clients, today, map), today };
 }
 
+function normalizeDirectorWages(raw) {
+  const dw = raw && typeof raw === 'object' ? raw : {};
+  const freqOk = ['Weekly', 'Fortnightly', 'Monthly'].includes(dw.freq);
+  const statusOk = dw.status === 'Active' || dw.status === 'Inactive';
+  const amount =
+    dw.amount === null || dw.amount === '' || dw.amount === undefined ? null : Number(dw.amount);
+  return {
+    amount: Number.isFinite(amount) ? amount : null,
+    freq: freqOk ? dw.freq : null,
+    status: statusOk ? dw.status : 'Inactive',
+  };
+}
+
 function serializeClient(c) {
   const { office, ...rest } = c;
   const status = c.status || 'Active';
+  const dw = c.directorWages?.toObject?.() || c.directorWages || {};
   return {
     ...rest,
     id: String(c._id),
@@ -818,6 +848,11 @@ function serializeClient(c) {
     payrollMgrId: c.payrollMgrId ? String(c.payrollMgrId) : null,
     groupId: c.groupId ? String(c.groupId) : null,
     isNew: !!c.isNewClient,
+    directorWages: {
+      amount: dw.amount != null && Number.isFinite(Number(dw.amount)) ? Number(dw.amount) : null,
+      freq: dw.freq || null,
+      status: dw.status === 'Active' ? 'Active' : 'Inactive',
+    },
   };
 }
 
@@ -1177,7 +1212,7 @@ async function listClients(user, query = {}) {
   const items = list.map((c) => ({
     ...serializeClient(c),
     canEdit: canEditClient(user, c),
-    isMine: canEditClient(user, c) && !isFullAccessUser(user),
+    isMine: isAssignedClient(user, c) && !isFullAccessUser(user),
     searchMatch: q ? rankClientSearch(c, q) : undefined,
   }));
   const [activeCount, inactiveCount] = await Promise.all([
@@ -1256,25 +1291,49 @@ async function getClient(user, id) {
 }
 
 async function createClient(user, body) {
-  if (!isFirmRole(user)) {
-    const err = new Error('Only admin/owner can add clients and assign them to staff/managers');
+  const role = user?.role;
+  if (!['admin', 'owner', 'manager', 'staff'].includes(role)) {
+    const err = new Error('You do not have permission to add clients');
     err.status = 403;
     throw err;
   }
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
   const today = dstr(todayFromSettings(settings));
-  const resolved = await resolveManager(body.managerId, body.managerName);
-  const managerId = resolved.managerId;
-  const managerName = resolved.managerName;
-  if (!managerId) {
-    const err = new Error(
-      managerName
-        ? `Manager "${managerName}" does not match a Team member — use a name from Team (Client managers = Team members)`
-        : 'Client manager is required — pick a team member'
-    );
-    err.status = 400;
-    throw err;
+
+  let managerId;
+  let managerName;
+  if (role === 'staff') {
+    // Staff may add clients but only allocate them to themselves.
+    managerId = user._id;
+    managerName = actorName(user);
+    if (!managerId) {
+      const err = new Error('Your account is missing an id — cannot allocate the client');
+      err.status = 400;
+      throw err;
+    }
+  } else if (role === 'manager' && !body.managerId && !body.managerName) {
+    // Managers can add clients; default allocation is themselves.
+    managerId = user._id;
+    managerName = actorName(user);
+    if (!managerId) {
+      const err = new Error('Your account is missing an id — cannot allocate the client');
+      err.status = 400;
+      throw err;
+    }
+  } else {
+    const resolved = await resolveManager(body.managerId, body.managerName);
+    managerId = resolved.managerId;
+    managerName = resolved.managerName;
+    if (!managerId) {
+      const err = new Error(
+        managerName
+          ? `Manager "${managerName}" does not match a Team member — use a name from Team (Client managers = Team members)`
+          : 'Client manager is required — pick a team member'
+      );
+      err.status = 400;
+      throw err;
+    }
   }
   const gst = !!body.gst;
   const type = normalizeStructure(body.type);
@@ -1318,6 +1377,7 @@ async function createClient(user, body) {
     qb: normalizeQb(body.qb),
     email: body.email || '',
     phone: body.phone || '',
+    directorWages: normalizeDirectorWages(body.directorWages),
     managerId,
     managerName,
     payrollMgrId,
@@ -1357,7 +1417,7 @@ async function updateClient(user, id, body) {
     throw err;
   }
   if (!canEditClient(user, c)) {
-    const err = new Error('You can view this client but only edit clients assigned to you');
+    const err = new Error('You have view-only access to All Clients');
     err.status = 403;
     throw err;
   }
@@ -1397,6 +1457,11 @@ async function updateClient(user, id, body) {
   if (body.type !== undefined) c.type = normalizeStructure(body.type);
   if (body.software !== undefined) c.software = normalizeSoftware(body.software);
   if (body.qb !== undefined) c.qb = normalizeQb(body.qb);
+
+  if (body.directorWages !== undefined && body.directorWages !== null) {
+    c.directorWages = normalizeDirectorWages(body.directorWages);
+    c.markModified('directorWages');
+  }
 
   applyLifecycleChange(user, c, body, today, who);
 
@@ -1879,7 +1944,8 @@ async function getPayments(user, query = {}) {
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
   const ci = qIndex(curQ);
-  const allScoped = await scopeClients(user);
+  // Hydrate from period store so Due / Not Paid match the client profile BAS cards.
+  const allScoped = await scopeClients(user, {}, { hydrate: true });
   const book = allScoped.filter(payTrack);
   const f = query.filter || 'all';
   const exposureRows = exposure(allScoped, curQ);
@@ -1899,12 +1965,12 @@ async function getPayments(user, query = {}) {
     else if (st === 'Part Paid') {
       collected += Math.round(exp / 2);
       dueNow += Math.round(exp / 2);
-    } else if (st === 'Not Paid' || st === 'Due') {
+    } else if (isPayUnpaid(st)) {
       dueNow += exp;
     }
     for (let i = 0; i < ci; i++) {
-      const pst = c.payq?.[QKEYS[i]];
-      if (pst !== 'Paid') {
+      const pst = payStatus(c, QKEYS[i]);
+      if (isPayOutstanding(pst)) {
         overdueIds.add(String(c._id));
         overdueTotal += pst === 'Part Paid' ? Math.round(exp / 2) : exp;
       }
@@ -1912,8 +1978,9 @@ async function getPayments(user, query = {}) {
   }
 
   let clients = book.filter((c) => {
-    if (f === 'unpaid') return payStatus(c, curQ) !== 'Paid';
-    if (f === 'due') return payStatus(c, curQ) === 'Due' || payStatus(c, curQ) === 'Not Paid';
+    const st = payStatus(c, curQ);
+    if (f === 'unpaid') return isPayOutstanding(st);
+    if (f === 'due') return isPayUnpaid(st);
     if (f === 'overdue') return overdueIds.has(String(c._id));
     if (f === 'unreconciled') return !c.recon?.[curQ];
     if (f === 'lodged-unpaid') return lodgedUnpaidIds.has(String(c._id));
@@ -2106,7 +2173,7 @@ async function exportPaymentsCsv(user) {
   }
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
-  const book = (await scopeClients(user)).filter(payTrack);
+  const book = (await scopeClients(user, {}, { hydrate: true })).filter(payTrack);
   const head = [
     'Entity Name',
     'ABN',
@@ -2130,7 +2197,7 @@ async function exportPaymentsCsv(user) {
         c.fee || '',
         c.freq || '',
         payExpected(c),
-        ...QKEYS.map((k) => c.payq?.[k] || ''),
+        ...QKEYS.map((k) => payStatus(c, k)),
         ...QKEYS.map((k) => (c.inv && c.inv[k]) || ''),
         payOwing(c, curQ),
         lr ? `${lr.src || 'Xero'} ${lr.date || ''}` : 'Never',
@@ -2219,15 +2286,10 @@ async function updateCmSettings(user, body) {
   return getMeta(user);
 }
 
-/** Pay runs are only generated for Active clients that actually have payroll switched on. */
-function canManagePayrollClient(user, client) {
-  if (isFirmRole(user)) return true;
-  if (client.payrollMgrId && String(client.payrollMgrId) === String(user._id)) return true;
-  return Boolean(
-    client.payrollMgr &&
-      user.name &&
-      nameMatchRegex(user.name).test(String(client.payrollMgr).trim())
-  );
+/** Module edit/full on Payroll unlocks firm-wide payroll/super mutations. */
+function canManagePayrollClient(user, _client) {
+  if (!user) return false;
+  return hasModuleLevel(user, 'cm-payroll', 'edit') || hasModuleLevel(user, 'cm-super', 'edit');
 }
 
 async function loadPayrollRuns(user) {
@@ -2272,7 +2334,7 @@ async function getPayroll(user, query = {}) {
   const later = enriched.filter((r) => r.when === 'later');
   const flags = enriched.filter((r) => r.billingFlag);
   const stpB = stpBreaches(enriched);
-  const superAction = filterSuperRuns(enriched, 'action');
+  const superAction = filterSuperRuns(enriched, 'action', todayD);
   const superOd = enriched.filter((r) => r.superOverdue);
   const seen = {};
   let flagVal = 0;
@@ -2285,8 +2347,18 @@ async function getPayroll(user, query = {}) {
   }
 
   const f = query.filter || 'action';
+  const weekOnly = enriched.filter((r) => r.when === 'week');
+  // Needs action = incomplete runs due now (overdue → week) plus completed-but-STP-outstanding.
+  const actionSeen = new Set();
+  const action = [];
+  for (const r of [...od, ...td, ...tm, ...weekOnly, ...stpB]) {
+    const key = `${r.clientId}|${r.payDate}`;
+    if (actionSeen.has(key)) continue;
+    actionSeen.add(key);
+    action.push(r);
+  }
   const sets = {
-    action: [...od, ...td, ...tm, ...enriched.filter((r) => r.when === 'week')],
+    action,
     overdue: od,
     today: td,
     tomorrow: tm,
@@ -2322,7 +2394,7 @@ async function getPayroll(user, query = {}) {
     filter: f,
     payrollRate: settings.payrollRate,
     counts: {
-      action: od.length + td.length + tm.length + enriched.filter((r) => r.when === 'week').length,
+      action: action.length,
       overdue: od.length,
       today: td.length,
       tomorrow: tm.length,
@@ -2346,29 +2418,35 @@ async function getPayroll(user, query = {}) {
       billingFlagClients: Object.keys(seen).length,
     },
     weekStrip,
-    items: filtered.slice(0, 80),
+    // Full filtered list so chip counts match the table (client-side pagination).
+    items: filtered,
   };
 }
 
 /** Payday Super view: one row per pay run with its super deadline (pay date + 7 days). */
 async function getSuper(user, query = {}) {
   const { runs, today } = await loadPayrollRuns(user);
-  const f = query.filter || 'action';
-  const items = filterSuperRuns(runs, f);
+  const todayD = today instanceof Date ? today : new Date(today);
+  const f = query.filter || 'outstanding';
   const unpaid = runs.filter((r) => r.super !== 'Paid');
   const overdue = runs.filter((r) => r.superOverdue);
   const dueToday = unpaid.filter((r) => r.superWhen === 'today');
-  const dueWeek = unpaid.filter((r) => r.superWhen === 'week');
+  const dueWeek = unpaid.filter((r) => r.superWhen === 'week' || r.superWhen === 'today');
   const paid = runs.filter((r) => r.super === 'Paid');
+  const action = filterSuperRuns(runs, 'action', todayD);
+  const outstanding = unpaid;
+  const filtered = sortSuperRuns(filterSuperRuns(runs, f, todayD));
+
   return {
     isFirm: isFirmRole(user),
-    today: dstr(today),
+    today: dstr(todayD),
     filter: f,
     counts: {
-      action: overdue.length + dueToday.length + dueWeek.length,
+      action: action.length,
       overdue: overdue.length,
       today: dueToday.length,
       week: dueWeek.length,
+      outstanding: outstanding.length,
       paid: paid.length,
       all: runs.length,
     },
@@ -2384,7 +2462,7 @@ async function getSuper(user, query = {}) {
         ? Math.round(((runs.length - overdue.length) / runs.length) * 1000) / 10
         : 100,
     },
-    items: items.slice(0, 80).map((r) => ({ ...r, bucket: superBucket(r) })),
+    items: filtered.map((r) => ({ ...r, bucket: superBucket(r) })),
   };
 }
 
@@ -2408,14 +2486,18 @@ async function updatePayrollRun(user, body) {
   const superOnly = body.super !== undefined && status === undefined && stp === undefined;
   const superStatus =
     body.super === 'Paid' ? 'Paid' : body.super === 'Not Paid' ? 'Not Paid' : existing?.super || 'Not Paid';
+  const nextStatus =
+    status !== undefined ? status : existing?.status || 'Not Started';
+  const nextStp = stp !== undefined ? stp : existing?.stp || 'Not Lodged';
   const update = {
-    status: status !== undefined ? status : existing?.status || (superOnly ? 'Not Started' : 'Completed'),
-    stp: stp !== undefined ? stp : existing?.stp || (superOnly ? 'Not Lodged' : 'Lodged'),
+    status: nextStatus,
+    stp: nextStp,
     super: superStatus,
     employees:
       body.employees !== undefined
         ? Number(body.employees)
-        : existing?.employees ?? (c.payrollActual || c.payrollBilled),
+        : existing?.employees ??
+          (nextStatus === 'Completed' ? c.payrollActual || c.payrollBilled || null : null),
     by: actorName(user),
     on: today,
   };
@@ -2432,6 +2514,7 @@ async function updatePayrollRun(user, body) {
       : `Payroll run ${payDate} marked ${update.status} / STP ${update.stp} / Super ${update.super}`,
   });
   await c.save();
+  invalidateScopeCache();
   return { ok: true };
 }
 
@@ -2528,10 +2611,23 @@ async function exportReminders(user, body) {
   }
   const curQL = curLabel(settings);
   const today = dstr(todayFromSettings(settings));
-  const ids = body.ids || [];
+  const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : [];
+  if (!ids.length) {
+    const err = new Error('Select at least one client to export');
+    err.status = 400;
+    throw err;
+  }
   const kind = body.kind === 'email' ? 'email' : 'sms';
+  // Same book as the reminders list — staff export their allocated clients; firm sees all.
+  const allowed = await scopeClients(user);
+  const allowedIds = new Set(allowed.map((c) => String(c._id)));
   const clients = await PracticeClient.find({ _id: { $in: ids }, ...ACTIVE }).lean();
-  const scoped = clients.filter((c) => isFirmRole(user) || String(c.managerId) === String(user._id));
+  const scoped = clients.filter((c) => allowedIds.has(String(c._id)));
+  if (!scoped.length) {
+    const err = new Error('None of the selected clients are in your reminders list');
+    err.status = 403;
+    throw err;
+  }
   const rows = [];
   for (const c of scoped) {
     const msg = (body.template || settings.reminderTemplate)
@@ -2539,8 +2635,8 @@ async function exportReminders(user, body) {
       .join(c.entity)
       .split('{quarter}')
       .join(curQL);
-    if (kind === 'sms') rows.push([c.phone.replace(/\s/g, ''), c.entity, msg]);
-    else rows.push([c.email, c.entity, msg]);
+    if (kind === 'sms') rows.push([String(c.phone || '').replace(/\s/g, ''), c.entity, msg]);
+    else rows.push([String(c.email || '').trim(), c.entity, msg]);
     await PracticeClient.updateOne(
       { _id: c._id },
       {

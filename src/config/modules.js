@@ -120,7 +120,7 @@ const ROLE_DEFAULT_LEVELS = {
     reports: 'none',
     'client-management': 'edit',
     'cm-dashboard': 'view',
-    'cm-clients': 'view',
+    'cm-clients': 'edit',
     'cm-payments': 'view',
     'cm-payroll': 'none',
     'cm-super': 'none',
@@ -179,7 +179,6 @@ const ROLE_CEILINGS = {
     'command-centre': 'none',
     team: 'none',
     reports: 'none',
-    'cm-clients': 'view',
     'cm-allocation': 'none',
     'cm-import': 'none',
     'cm-periods': 'none',
@@ -193,10 +192,7 @@ const ROLE_CEILINGS = {
     'quote-pad-pricing': 'none',
     'migration-rates': 'none',
     'sales-commission': 'none',
-    'firm-library': 'view',
     'cm-dashboard': 'view',
-    'cm-payments': 'view',
-    'cm-groups': 'view',
   },
 };
 
@@ -283,26 +279,38 @@ function applyCeilings(role, access) {
 }
 
 /**
- * Staff special-access flags. Owner/Admin bypass.
- * Managers get payroll/AML from the role matrix — flags only gate Staff.
- * When flag is false, related modules forced to none.
- * When flag is true and level is none, elevate to edit (default unlock).
+ * Special-access flags (Payroll / AML Officer).
+ * Owner/Admin bypass. When a flag is ON, elevate those modules to edit
+ * (full operational access under CRM) and bump Client Management parent
+ * so Payroll/Super are not wiped by parent/child rules.
+ * When flag is OFF for Staff, related modules are forced to none.
+ * Managers keep role-matrix defaults when their flag is off.
  */
 function applySpecialFlags(user, access) {
   if (isFullAccessRole(user.role)) return access;
-  if (user.role !== 'staff') return access;
   const next = { ...access };
   const aml = !!user.amlOfficer;
   const pay = !!user.payrollAccess;
+  const isStaff = user.role === 'staff';
 
-  for (const key of FLAG_MODULES.amlOfficer) {
-    if (!aml) next[key] = 'none';
-    else if (normalizeLevel(next[key] || 'none') === 'none') next[key] = 'edit';
+  if (aml) {
+    for (const key of FLAG_MODULES.amlOfficer) {
+      next[key] = maxLevel(normalizeLevel(next[key] || 'none'), 'edit');
+    }
+  } else if (isStaff) {
+    for (const key of FLAG_MODULES.amlOfficer) next[key] = 'none';
   }
-  for (const key of FLAG_MODULES.payrollAccess) {
-    if (!pay) next[key] = 'none';
-    else if (normalizeLevel(next[key] || 'none') === 'none') next[key] = 'edit';
+
+  if (pay) {
+    for (const key of FLAG_MODULES.payrollAccess) {
+      next[key] = maxLevel(normalizeLevel(next[key] || 'none'), 'edit');
+    }
+    // Parent hub must be at least edit so CM children stay visible/usable.
+    next['client-management'] = maxLevel(normalizeLevel(next['client-management'] || 'none'), 'edit');
+  } else if (isStaff) {
+    for (const key of FLAG_MODULES.payrollAccess) next[key] = 'none';
   }
+
   return next;
 }
 
@@ -382,8 +390,9 @@ function effectiveAccess(user) {
     access = defaultsForRole(user.role);
   }
 
-  access = applySpecialFlags(user, access);
   access = enforceParentChild(applyCeilings(user.role, access));
+  // Flags last so Payroll/AML unlocks are not clamped by role ceilings (e.g. manager AML view).
+  access = applySpecialFlags(user, access);
   return access;
 }
 
@@ -459,8 +468,9 @@ function normalizeIncomingAccess(role, rawAccess, flags = {}) {
     access = sanitizeModuleAccess(role, rawAccess);
   }
 
-  access = applySpecialFlags(userLike, access);
   access = enforceParentChild(applyCeilings(role, access));
+  // Flags last so designated Payroll/AML edit is persisted above role ceilings.
+  access = applySpecialFlags(userLike, access);
   return compactModuleAccess(access);
 }
 
