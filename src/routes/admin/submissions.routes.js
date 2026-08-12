@@ -16,6 +16,7 @@ const {
   noteValidators,
   requestDocumentValidators,
   emailToStaffValidators,
+  deleteSubmission,
 } = require('../../controllers/admin/submissions.controller');
 
 router.use(protect);
@@ -23,6 +24,7 @@ router.use(requireRole('admin', 'owner', 'manager', 'staff'));
 
 router.get('/', listSubmissions);
 router.get('/:id', getSubmissionById);
+router.delete('/:id', deleteSubmission);
 
 router.put('/:id/assign', requireRole('admin', 'owner', 'manager', 'staff'), assignValidators, validate, assignSubmission);
 router.put('/:id/status', statusValidators, validate, updateStatus);

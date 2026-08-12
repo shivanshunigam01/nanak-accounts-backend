@@ -325,6 +325,44 @@ const updatePaymentStatus = asyncHandler(async (req, res) => {
 
   res.json({ success: true, submission });
 });
+
+const deleteSubmission = asyncHandler(async (req, res) => {
+  if (req.user.role !== 'owner') {
+    return res.status(403).json({
+      success: false,
+      message: 'Only the owner can delete submissions',
+    });
+  }
+
+  const submission = await Submission.findById(req.params.id);
+  if (!submission) {
+    return res.status(404).json({ success: false, message: 'Submission not found' });
+  }
+
+  const snapshot = {
+    orderNumber: submission.orderNumber,
+    email: submission.email,
+    serviceKey: submission.serviceKey,
+  };
+
+  await ActivityLog.create({
+    submissionId: submission._id,
+    action: 'deleted',
+    description: `Submission ${submission.orderNumber || submission._id} permanently deleted`,
+    doneBy: req.user.name,
+    details: snapshot,
+    timestamp: new Date(),
+  }).catch(() => {});
+
+  await Submission.deleteOne({ _id: submission._id });
+
+  res.json({
+    success: true,
+    message: 'Submission deleted',
+    deleted: snapshot,
+  });
+});
+
 module.exports = {
   listSubmissions,
   getSubmissionById,
@@ -339,4 +377,5 @@ module.exports = {
   requestDocumentValidators,
   emailToStaffValidators,
   updatePaymentStatus,
+  deleteSubmission,
 };
