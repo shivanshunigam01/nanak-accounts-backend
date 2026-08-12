@@ -46,6 +46,7 @@ const submissionSchema = new mongoose.Schema(
 
     jobStatus: { type: String, enum: ['new', 'assigned', 'in_progress', 'review', 'completed', 'failed'], default: 'new', index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    assignedAt: { type: Date, default: null, index: true },
 
     notes: { type: String, default: '' },
     files: { type: [fileSchema], default: [] },

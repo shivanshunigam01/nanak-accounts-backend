@@ -36,7 +36,7 @@ router.get('/super', requireModule('cm-super'), c.getSuper);
 
 router.get('/lodgement', requireModule('cm-lodgement'), c.getLodgement);
 router.get('/reminders', requireModule('cm-reminders'), c.getReminders);
-router.post('/reminders/export', requireModule('cm-reminders'), c.exportReminders);
+router.post('/reminders/export', requireModuleLevel('cm-reminders', 'edit'), c.exportReminders);
 
 router.patch('/settings', requireModuleLevel('client-management', 'edit'), c.updateSettings);
 

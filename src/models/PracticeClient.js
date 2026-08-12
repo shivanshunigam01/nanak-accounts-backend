@@ -86,6 +86,26 @@ const practiceClientSchema = new mongoose.Schema(
     },
     email: { type: String, default: '' },
     phone: { type: String, default: '' },
+    /** Director wages / fee tracked separately from package fee (owners & managers). */
+    directorWages: {
+      type: new mongoose.Schema(
+        {
+          amount: { type: Number, default: null },
+          freq: {
+            type: String,
+            enum: ['Weekly', 'Fortnightly', 'Monthly', null],
+            default: null,
+          },
+          status: {
+            type: String,
+            enum: ['Active', 'Inactive'],
+            default: 'Inactive',
+          },
+        },
+        { _id: false }
+      ),
+      default: () => ({ amount: null, freq: null, status: 'Inactive' }),
+    },
     managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     managerName: { type: String, default: '', index: true },
     payrollMgrId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

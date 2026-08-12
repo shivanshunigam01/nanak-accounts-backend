@@ -538,7 +538,8 @@ exports.exportCddPack = async (req, res) => {
 
 exports.listSmrs = async (req, res) => {
   try {
-    const isFull = ["admin", "owner"].includes(req.user?.role);
+    const isFull =
+      ["admin", "owner"].includes(req.user?.role) || !!req.user?.amlOfficer;
     const list = await AmlSmr.find().sort({ createdAt: -1 }).lean();
     const data = list.map((s) => ({
       _id: s._id,

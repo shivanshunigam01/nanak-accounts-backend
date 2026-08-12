@@ -33,6 +33,9 @@ const listSubmissions = asyncHandler(async (req, res) => {
     paymentStatus,
     serviceKey,
     jobStatus,
+    assignedTo,
+    assigned_to,
+    mine,
     sortBy = 'createdAt',
     sortOrder = 'desc',
   } = req.query;
@@ -50,9 +53,20 @@ const listSubmissions = asyncHandler(async (req, res) => {
     filter.paymentStatus = paymentStatus;
   }
   if (serviceKey) filter.serviceKey = serviceKey;
-  if (jobStatus) filter.jobStatus = jobStatus;
+  if (jobStatus) {
+    const statuses = String(jobStatus)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    filter.jobStatus = statuses.length > 1 ? { $in: statuses } : statuses[0];
+  }
 
-  if (req.user.role === 'staff') {
+  const assigneeFilter = assignedTo || assigned_to;
+  if (mine === '1' || mine === 'true') {
+    filter.assignedTo = req.user._id;
+  } else if (assigneeFilter) {
+    filter.assignedTo = assigneeFilter;
+  } else if (req.user.role === 'staff') {
     filter.assignedTo = req.user._id;
   }
 
@@ -113,6 +127,7 @@ const assignSubmission = asyncHandler(async (req, res) => {
 
   submission.assignedTo = staff._id;
   submission.jobStatus = 'assigned';
+  submission.assignedAt = new Date();
 
   const activity = {
     action: 'assigned',

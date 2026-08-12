@@ -94,31 +94,8 @@ function buildRunsForClients(clients, today, overridesByKey = {}) {
           amount: (c.payrollActual || c.payrollBilled || 0) * 25,
         };
       } else {
-        const past = pay < todayD;
-        let status;
-        let stp;
-        let emp = null;
-        let by = null;
-        let on = null;
-        const idNum = Number(String(cid).slice(-4).replace(/\D/g, '') || '1') || 1;
-        if (past) {
-          const lateOne = (idNum + pay.getDate()) % 11 === 0;
-          status = lateOne ? 'Not Started' : 'Completed';
-          stp =
-            status === 'Completed'
-              ? (idNum + pay.getDate()) % 13 === 0
-                ? 'Not Lodged'
-                : 'Lodged'
-              : 'Not Lodged';
-          if (status === 'Completed') {
-            emp = c.payrollActual || c.payrollBilled;
-            by = c.payrollMgr;
-            on = dstr(pay);
-          }
-        } else {
-          status = dd <= 3 && (idNum + pay.getDate()) % 4 === 0 ? 'In Progress' : 'Not Started';
-          stp = 'Not Lodged';
-        }
+        // No saved override: treat as unfinished so filters (Needs action / Overdue / STP)
+        // reflect real work. Staff mark runs done via overrides.
         base = {
           id: ++seq,
           clientId: cid,
@@ -135,12 +112,12 @@ function buildRunsForClients(clients, today, overridesByKey = {}) {
           payDate,
           payStr: dstr(pay),
           payWd: dwd(pay),
-          status,
-          stp,
+          status: 'Not Started',
+          stp: 'Not Lodged',
           super: 'Not Paid',
-          employees: emp,
-          by,
-          on,
+          employees: null,
+          by: null,
+          on: null,
           amount: (c.payrollActual || c.payrollBilled || 0) * 25,
         };
       }
@@ -181,18 +158,44 @@ function superBucket(r) {
   return 'later';
 }
 
-function filterSuperRuns(runs, filter) {
+/**
+ * Super list filters.
+ * @param {Date} [todayD] used for needs-action (pay day reached).
+ */
+function filterSuperRuns(runs, filter, todayD) {
   const f = filter || 'action';
+  const unpaid = (r) => r.super !== 'Paid';
   if (f === 'all') return runs;
   if (f === 'paid') return runs.filter((r) => r.super === 'Paid');
+  if (f === 'outstanding') return runs.filter(unpaid);
   if (f === 'overdue') return runs.filter((r) => r.superOverdue);
-  if (f === 'today') return runs.filter((r) => r.superWhen === 'today' && r.super === 'Not Paid');
-  if (f === 'week')
-    return runs.filter((r) => (r.superWhen === 'week' || r.superWhen === 'today') && r.super === 'Not Paid');
-  // needs action: unpaid, due within 7 days or overdue
-  return runs.filter(
-    (r) => r.super === 'Not Paid' && (r.superOverdue || r.superWhen === 'today' || r.superWhen === 'week')
-  );
+  if (f === 'today') return runs.filter((r) => unpaid(r) && r.superWhen === 'today');
+  if (f === 'week') {
+    return runs.filter(
+      (r) => unpaid(r) && (r.superWhen === 'week' || r.superWhen === 'today')
+    );
+  }
+  // Needs action: unpaid and deadline urgent, or pay day already reached (clock started).
+  return runs.filter((r) => {
+    if (!unpaid(r)) return false;
+    if (r.superOverdue || r.superWhen === 'today' || r.superWhen === 'week') return true;
+    if (!todayD || !r.pay) return false;
+    const pay = r.pay instanceof Date ? r.pay : new Date(r.pay);
+    if (Number.isNaN(pay.getTime())) return false;
+    return dayDiff(pay, todayD) <= 0;
+  });
+}
+
+function sortSuperRuns(runs) {
+  const rank = { overdue: 0, today: 1, week: 2, later: 3, paid: 4 };
+  return [...runs].sort((a, b) => {
+    const ra = rank[superBucket(a)] ?? 9;
+    const rb = rank[superBucket(b)] ?? 9;
+    if (ra !== rb) return ra - rb;
+    const da = a.pay instanceof Date ? a.pay.getTime() : 0;
+    const db = b.pay instanceof Date ? b.pay.getTime() : 0;
+    return da - db;
+  });
 }
 
 module.exports = {
@@ -203,4 +206,5 @@ module.exports = {
   enrichRunSuper,
   superBucket,
   filterSuperRuns,
+  sortSuperRuns,
 };
