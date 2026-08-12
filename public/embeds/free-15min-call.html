@@ -55,12 +55,12 @@
   .npc-get b{color:var(--green);flex:none;font-weight:800;font-size:14px;line-height:1.35}
 
   .npc-q{font-size:15px;font-weight:700;margin-bottom:12px;color:#111827}
-  .npc-chips{display:flex;flex-direction:column;gap:10px}
+  .npc-chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
   .npc-chip{
     width:100%;border:1.5px solid #D1D5DB;background:#fff;border-radius:999px;
-    padding:13px 18px;font-size:15px;font-family:inherit;cursor:pointer;
-    transition:border-color .15s,background .15s,box-shadow .15s;color:#1F2937;line-height:1.2;
-    text-align:center;font-weight:500;
+    padding:11px 8px;font-size:12.5px;font-family:inherit;cursor:pointer;
+    transition:border-color .15s,background .15s,box-shadow .15s;color:#1F2937;line-height:1.25;
+    text-align:center;font-weight:500;min-height:44px;
   }
   .npc-chip:hover{border-color:#F5A574;background:#FFFAF6}
   .npc-chip.sel{
@@ -151,7 +151,8 @@
     .npc-body{padding:16px 16px 18px}
     .npc-gets{grid-template-columns:1fr;gap:8px}
     .npc-fields{grid-template-columns:1fr}
-    .npc-chip{padding:12px 16px;font-size:14.5px}
+    .npc-chips{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+    .npc-chip{padding:10px 4px;font-size:11px;min-height:42px}
     .npc-trust{justify-content:flex-start}
   }
 </style>
