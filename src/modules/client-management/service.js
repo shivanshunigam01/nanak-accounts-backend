@@ -5,6 +5,7 @@ const PracticePayrollOverride = require('../../models/PracticePayrollOverride');
 const PracticePeriod = require('../../models/PracticePeriod');
 const ClientPeriodStatus = require('../../models/ClientPeriodStatus');
 const User = require('../../models/User');
+const mongoose = require('mongoose');
 const { isFullAccessRole, hasModuleLevel } = require('../../config/modules');
 const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO, parseFlexibleDate } = require('./dates');
 const {
@@ -663,7 +664,8 @@ async function clientFilterQuery(user, query = {}) {
     filter.managerId = query.managerId;
   } else if (query.manager && query.manager !== 'All') {
     if (query.manager === 'mine' && user?._id) {
-      filter.managerId = user._id;
+      // Match assigned clients by managerId, with name fallback for mis-linked rows.
+      Object.assign(filter, staffAllocationFilter(user));
     } else {
       const resolved = await resolveManager(null, query.manager);
       const targetName = resolved.managerName || query.manager;
@@ -1233,27 +1235,76 @@ async function listClients(user, query = {}) {
 }
 
 async function getClient(user, id) {
-  const c = await PracticeClient.findById(id).lean();
+  const rawId = String(id || '').trim();
+  if (!rawId || !mongoose.Types.ObjectId.isValid(rawId)) {
+    const err = new Error('Client not found');
+    err.status = 404;
+    throw err;
+  }
+
+  let c;
+  try {
+    c = await PracticeClient.findById(rawId).lean();
+  } catch (e) {
+    if (e?.name === 'CastError') {
+      const err = new Error('Client not found');
+      err.status = 404;
+      throw err;
+    }
+    throw e;
+  }
   if (!c) {
     const err = new Error('Client not found');
     err.status = 404;
     throw err;
   }
-  // All roles can view any client (including Inactive); editing is gated by canEdit.
+
+  // Anyone with cm-clients access can open the profile (All Clients / My Clients).
+  // Editing stays gated by canEdit / module level.
+  if (!hasModuleLevel(user, 'cm-clients', 'view') && !hasModuleLevel(user, 'client-management', 'view')) {
+    const err = new Error('You do not have access to this client');
+    err.status = 403;
+    throw err;
+  }
+
   const settings = await getSettings();
-  await hydrateClientsForWorkingYear([c], settings);
-  await attachLodgementYears(c, settings);
+  try {
+    await hydrateClientsForWorkingYear([c], settings);
+  } catch (e) {
+    console.error('[cm] hydrateClientsForWorkingYear', e.message);
+  }
+  try {
+    await attachLodgementYears(c, settings);
+  } catch (e) {
+    console.error('[cm] attachLodgementYears', e.message);
+    c.lodgementYears = Array.isArray(c.lodgementYears) ? c.lodgementYears : [];
+  }
+
   let group = null;
   let members = [];
   if (c.groupId) {
     group = await PracticeGroup.findById(c.groupId).lean();
     members = await PracticeClient.find({ groupId: c.groupId, ...ACTIVE }).lean();
-    await hydrateClientsForWorkingYear(members, settings);
+    try {
+      await hydrateClientsForWorkingYear(members, settings);
+    } catch (e) {
+      console.error('[cm] hydrate group members', e.message);
+    }
   }
-  const [{ runs }, periodsPayload] = await Promise.all([
-    loadRuns([c], settings),
-    listPeriods(settings, { enrich: false }),
-  ]);
+
+  let runs = [];
+  let periodsPayload = { periods: [] };
+  try {
+    const loaded = await Promise.all([
+      loadRuns([c], settings),
+      listPeriods(settings, { enrich: false }),
+    ]);
+    runs = loaded[0]?.runs || [];
+    periodsPayload = loaded[1] || { periods: [] };
+  } catch (e) {
+    console.error('[cm] getClient side-loads', e.message);
+  }
+
   const canEdit = canEditClient(user, c);
   const canEditPayroll = canManagePayrollClient(user, c);
   const memberSerialized = members.map(serializeClient);
@@ -1276,7 +1327,7 @@ async function getClient(user, id) {
       currentQuarter: settings.currentQuarter,
       currentQuarterLabel: curLabel(settings),
       quarters: settings.quarters,
-      periods: periodsPayload.periods,
+      periods: periodsPayload.periods || [],
       annualType: annualType(c),
       exitReasons: EXIT_REASONS,
       relationshipLabels: REL_LABELS,

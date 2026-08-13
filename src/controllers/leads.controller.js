@@ -20,10 +20,24 @@ function leadScopeIsOwn(user) {
   return scope === "own";
 }
 
+function sameId(a, b) {
+  if (a == null || b == null) return false;
+  return String(a) === String(b);
+}
+
+/** Resolve owner id whether `owner` is ObjectId, string, or populated user. */
+function leadOwnerId(lead) {
+  if (!lead || lead.owner == null) return null;
+  if (typeof lead.owner === "object") {
+    return lead.owner._id || lead.owner.id || null;
+  }
+  return lead.owner;
+}
+
 function assertLeadOwned(req, lead) {
   if (!leadScopeIsOwn(req.user)) return null;
-  const ownerId = lead.owner?._id || lead.owner;
-  if (!ownerId || String(ownerId) !== String(req.user._id)) {
+  const ownerId = leadOwnerId(lead);
+  if (!ownerId || !sameId(ownerId, req.user._id)) {
     return {
       status: 403,
       body: { success: false, message: "You do not have access to this lead" },
@@ -144,16 +158,28 @@ exports.list = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
+    // Ownership check uses the raw owner ObjectId so a failed populate
+    // (deleted user) cannot lock an assigned staff member out of their lead.
+    if (leadScopeIsOwn(req.user)) {
+      const raw = await Lead.findById(req.params.id).select("owner").lean();
+      if (!raw) {
+        return res.status(404).json({ success: false, message: "Lead not found" });
+      }
+      const denied = assertLeadOwned(req, raw);
+      if (denied) return res.status(denied.status).json(denied.body);
+    }
+
     const lead = await Lead.findById(req.params.id)
       .populate("owner", "name email role")
       .lean();
     if (!lead) {
       return res.status(404).json({ success: false, message: "Lead not found" });
     }
-    const denied = assertLeadOwned(req, lead);
-    if (denied) return res.status(denied.status).json(denied.body);
     return res.json({ success: true, data: lead });
   } catch (err) {
+    if (err?.name === "CastError") {
+      return res.status(404).json({ success: false, message: "Lead not found" });
+    }
     return res.status(500).json({ success: false, message: err.message });
   }
 };
