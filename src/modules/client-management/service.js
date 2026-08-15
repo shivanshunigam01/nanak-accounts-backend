@@ -613,9 +613,10 @@ function scopeCacheKey(user, extra, select) {
 /** Every operational view (dashboard, payroll, super, lodgement, fees) is Active-only. */
 async function scopeClients(user, extra = {}, opts = {}) {
   const filter = { ...ACTIVE, ...extra };
-  if (!isFirmRole(user)) Object.assign(filter, staffAllocationFilter(user));
+  // allClients: firm-wide list so Payments & Fees mirrors profile payment edits for every package client.
+  if (!opts.allClients && !isFirmRole(user)) Object.assign(filter, staffAllocationFilter(user));
   const select = opts.select || CLIENT_LEAN_SELECT;
-  const key = scopeCacheKey(user, extra, select);
+  const key = `${scopeCacheKey(user, extra, select)}|all:${opts.allClients ? 1 : 0}`;
   const now = Date.now();
   const hit = scopeCache.get(key);
   if (!opts.hydrate && hit && now - hit.at < SCOPE_CACHE_TTL_MS) {
@@ -1995,10 +1996,17 @@ async function getPayments(user, query = {}) {
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
   const ci = qIndex(curQ);
-  // Hydrate from period store so Due / Not Paid match the client profile BAS cards.
-  const allScoped = await scopeClients(user, {}, { hydrate: true });
-  const book = allScoped.filter(payTrack);
+  // Firm-wide hydrate so payment status edited on any client profile shows here.
+  const allScoped = await scopeClients(user, {}, { hydrate: true, allClients: true });
+  const book = allScoped
+    .filter(payTrack)
+    .sort((a, b) =>
+      String(a.entity || '').localeCompare(String(b.entity || ''), undefined, { sensitivity: 'base' })
+    );
   const f = query.filter || 'all';
+  const q = String(query.q || '')
+    .trim()
+    .toLowerCase();
   const exposureRows = exposure(allScoped, curQ);
   const lodgedUnpaidIds = new Set(exposureRows.map((r) => r.clientId));
   const lodgedUnpaidTotal = exposureRows.reduce((t, r) => t + (r.amt || 0), 0);
@@ -2038,6 +2046,13 @@ async function getPayments(user, query = {}) {
     return true;
   });
 
+  if (q) {
+    clients = clients.filter((c) => {
+      const hay = `${c.entity || ''} ${c.abn || ''} ${c.managerName || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
   const feeStale = allScoped
     .filter((c) => c.pkg === 'On Package' && c.fee && monthsSince(c.feeReview) >= settings.feeReviewMonths)
     .sort((a, b) => monthsSince(b.feeReview) - monthsSince(a.feeReview));
@@ -2056,6 +2071,7 @@ async function getPayments(user, query = {}) {
     currentQuarterLabel: curLabel(settings),
     quarters: settings.quarters,
     filter: f,
+    q: q || '',
     feeReviewMonths: settings.feeReviewMonths,
     payrollRate: settings.payrollRate,
     kpis: {
@@ -2074,7 +2090,7 @@ async function getPayments(user, query = {}) {
       lodgedUnpaidQuarters: exposureRows.length,
       lodgedUnpaidTotal,
     },
-    items: clients.slice(0, 80).map((c) => ({
+    items: clients.map((c) => ({
       ...serializeClient(c),
       owing: payOwing(c, curQ),
       expectedQ: payExpected(c),
@@ -2224,7 +2240,7 @@ async function exportPaymentsCsv(user) {
   }
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
-  const book = (await scopeClients(user, {}, { hydrate: true })).filter(payTrack);
+  const book = (await scopeClients(user, {}, { hydrate: true, allClients: true })).filter(payTrack);
   const head = [
     'Entity Name',
     'ABN',
