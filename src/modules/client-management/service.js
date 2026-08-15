@@ -218,10 +218,39 @@ function pickBestUser(candidates) {
   return [...candidates].sort((a, b) => teamMemberScore(b) - teamMemberScore(a))[0];
 }
 
-/** Module edit/full on All Clients unlocks firm-wide client CRUD (assignment is display-only). */
-function canEditClient(user, _c) {
+/** Firm-wide edit with module edit/full; staff & managers also edit clients assigned to them (My Clients). */
+function canEditClient(user, c) {
+  if (!user || !c) return false;
+  if (isFullAccessUser(user)) return true;
+  if (hasModuleLevel(user, 'cm-clients', 'edit')) return true;
+  if (
+    (user.role === 'staff' || user.role === 'manager') &&
+    hasModuleLevel(user, 'cm-clients', 'view') &&
+    isAssignedClient(user, c)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isAssignedPayrollClient(user, client) {
+  if (!user || !client) return false;
+  if (isAssignedClient(user, client)) return true;
+  if (client.payrollMgrId && String(client.payrollMgrId) === String(user._id)) return true;
+  return Boolean(
+    client.payrollMgr &&
+      user.name &&
+      nameMatchRegex(user.name).test(String(client.payrollMgr).trim())
+  );
+}
+
+function canCreateClient(user) {
   if (!user) return false;
-  return hasModuleLevel(user, 'cm-clients', 'edit');
+  if (isFullAccessUser(user)) return true;
+  if (hasModuleLevel(user, 'cm-clients', 'edit')) return true;
+  return (
+    (user.role === 'staff' || user.role === 'manager') && hasModuleLevel(user, 'cm-clients', 'view')
+  );
 }
 
 /** Assignment helper for "mine" badges/filters — not used for write permission. */
@@ -1344,7 +1373,7 @@ async function getClient(user, id) {
 
 async function createClient(user, body) {
   const role = user?.role;
-  if (!['admin', 'owner', 'manager', 'staff'].includes(role)) {
+  if (!canCreateClient(user)) {
     const err = new Error('You do not have permission to add clients');
     err.status = 403;
     throw err;
@@ -1469,7 +1498,7 @@ async function updateClient(user, id, body) {
     throw err;
   }
   if (!canEditClient(user, c)) {
-    const err = new Error('You have view-only access to All Clients');
+    const err = new Error('You can view this client but cannot edit clients assigned to others');
     err.status = 403;
     throw err;
   }
@@ -2353,10 +2382,31 @@ async function updateCmSettings(user, body) {
   return getMeta(user);
 }
 
-/** Module edit/full on Payroll unlocks firm-wide payroll/super mutations. */
-function canManagePayrollClient(user, _client) {
+/** Module edit/full is firm-wide; staff & managers also manage payroll on assigned clients. */
+function canManagePayrollClient(user, client) {
   if (!user) return false;
-  return hasModuleLevel(user, 'cm-payroll', 'edit') || hasModuleLevel(user, 'cm-super', 'edit');
+  if (isFullAccessUser(user)) return true;
+  if (hasModuleLevel(user, 'cm-payroll', 'edit') || hasModuleLevel(user, 'cm-super', 'edit')) {
+    return true;
+  }
+  const canViewPayroll =
+    hasModuleLevel(user, 'cm-payroll', 'view') || hasModuleLevel(user, 'cm-super', 'view');
+  if (
+    (user.role === 'staff' || user.role === 'manager') &&
+    canViewPayroll &&
+    isAssignedPayrollClient(user, client)
+  ) {
+    return true;
+  }
+  // Client managers often lack a payroll module but still run payroll on My Clients.
+  if (
+    (user.role === 'staff' || user.role === 'manager') &&
+    hasModuleLevel(user, 'cm-clients', 'view') &&
+    isAssignedPayrollClient(user, client)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 async function loadPayrollRuns(user) {

@@ -10,11 +10,11 @@ router.get('/meta', c.getMeta);
 router.get('/dashboard', requireModule('cm-dashboard'), c.getDashboard);
 
 router.get('/clients', requireModule('cm-clients'), c.listClients);
-router.post('/clients', requireModuleLevel('cm-clients', 'edit'), c.createClient);
+router.post('/clients', requireModule('cm-clients'), c.createClient);
 router.post('/clients/import', requireModuleLevel('cm-import', 'edit'), c.importClients);
 router.get('/clients-export', requireModule('cm-import'), c.exportClients);
 router.get('/clients/:id', requireModule('cm-clients'), c.getClient);
-router.patch('/clients/:id', requireModuleLevel('cm-clients', 'edit'), c.updateClient);
+router.patch('/clients/:id', requireModule('cm-clients'), c.updateClient);
 
 router.get('/allocation', requireModule('cm-allocation'), c.getAllocation);
 router.get('/groups', requireModule('cm-groups'), c.listGroups);
@@ -31,7 +31,7 @@ router.post('/payments/preview-xero', requireModuleLevel('cm-payments', 'edit'),
 router.post('/payments/reconcile-xero', requireModuleLevel('cm-payments', 'edit'), c.reconcileXero);
 
 router.get('/payroll', requireModule('cm-payroll'), c.getPayroll);
-router.post('/payroll/run', requireModuleLevel('cm-payroll', 'edit'), c.updatePayrollRun);
+router.post('/payroll/run', requireModule('cm-clients'), c.updatePayrollRun);
 router.get('/super', requireModule('cm-super'), c.getSuper);
 
 router.get('/lodgement', requireModule('cm-lodgement'), c.getLodgement);
