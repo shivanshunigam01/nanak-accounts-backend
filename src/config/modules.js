@@ -7,6 +7,7 @@ const RANK = { none: 0, view: 1, edit: 2, full: 3 };
 const CM_SUBMODULES = [
   'cm-dashboard',
   'cm-clients',
+  'cm-onboarding',
   'cm-payments',
   'cm-payroll',
   'cm-super',
@@ -84,6 +85,7 @@ const ROLE_DEFAULT_LEVELS = {
     'client-management': 'edit',
     'cm-dashboard': 'edit',
     'cm-clients': 'edit',
+    'cm-onboarding': 'edit',
     'cm-payments': 'edit',
     'cm-payroll': 'edit',
     'cm-super': 'edit',
@@ -121,6 +123,7 @@ const ROLE_DEFAULT_LEVELS = {
     'client-management': 'edit',
     'cm-dashboard': 'view',
     'cm-clients': 'edit',
+    'cm-onboarding': 'view',
     'cm-payments': 'view',
     'cm-payroll': 'none',
     'cm-super': 'none',

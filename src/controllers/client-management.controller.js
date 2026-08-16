@@ -1,6 +1,7 @@
 const { asyncHandler } = require('../middleware/asyncHandler');
 const { isFullAccessRole } = require('../config/modules');
 const svc = require('../modules/client-management/service');
+const onboardingSvc = require('../modules/client-management/onboarding.service');
 const { seedClientManagement, clearClientManagement } = require('../seeds/clientManagement.seed');
 
 exports.getMeta = asyncHandler(async (req, res) => {
@@ -186,5 +187,55 @@ exports.clearSeed = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Admin only' });
   }
   const data = await clearClientManagement();
+  res.json({ success: true, ...data });
+});
+
+// --- Onboarding ---
+
+exports.getOnboardingMeta = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.getMeta(req.user);
+  res.json({ success: true, data });
+});
+
+exports.getOnboardingDashboard = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.getDashboard();
+  res.json({ success: true, data });
+});
+
+exports.listOnboardingEntities = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.listEntities(req.query.filter || 'active');
+  res.json({ success: true, data });
+});
+
+exports.getOnboardingEntity = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.getEntity(req.params.id);
+  res.json({ success: true, data });
+});
+
+exports.createOnboardingEntity = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.createEntity(req.user, req.body);
+  res.status(201).json({ success: true, data });
+});
+
+exports.updateOnboardingEntity = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.updateEntity(req.user, req.params.id, req.body);
+  res.json({ success: true, data });
+});
+
+exports.searchOnboardingClients = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.searchClients(req.query.q);
+  res.json({ success: true, data });
+});
+
+exports.getOnboardingManagerFiles = asyncHandler(async (req, res) => {
+  const data = await onboardingSvc.getManagerFiles();
+  res.json({ success: true, data });
+});
+
+exports.seedOnboarding = asyncHandler(async (req, res) => {
+  if (!isFullAccessRole(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Admin only' });
+  }
+  const data = await onboardingSvc.seedOnboarding(req.user);
   res.json({ success: true, ...data });
 });

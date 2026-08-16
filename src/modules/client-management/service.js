@@ -3115,4 +3115,6 @@ module.exports = {
   ACTIVE,
   INVOICE_REQUIRED_MESSAGE,
   EXIT_REASONS,
+  resolveManager,
+  listAssignableTeamMembers,
 };

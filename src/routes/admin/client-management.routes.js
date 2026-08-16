@@ -51,4 +51,14 @@ router.post('/fy/advance-quarter', requireModuleLevel('cm-periods', 'full'), c.a
 router.post('/seed', requireModuleLevel('client-management', 'full'), c.seed);
 router.post('/seed/clear', requireModuleLevel('client-management', 'full'), c.clearSeed);
 
+router.get('/onboarding/meta', requireModule('cm-onboarding'), c.getOnboardingMeta);
+router.get('/onboarding/dashboard', requireModule('cm-onboarding'), c.getOnboardingDashboard);
+router.get('/onboarding/client-search', requireModule('cm-onboarding'), c.searchOnboardingClients);
+router.get('/onboarding/manager-files', requireModule('cm-onboarding'), c.getOnboardingManagerFiles);
+router.get('/onboarding/entities', requireModule('cm-onboarding'), c.listOnboardingEntities);
+router.post('/onboarding/entities', requireModuleLevel('cm-onboarding', 'edit'), c.createOnboardingEntity);
+router.get('/onboarding/entities/:id', requireModule('cm-onboarding'), c.getOnboardingEntity);
+router.patch('/onboarding/entities/:id', requireModuleLevel('cm-onboarding', 'edit'), c.updateOnboardingEntity);
+router.post('/onboarding/seed', requireModuleLevel('client-management', 'full'), c.seedOnboarding);
+
 module.exports = router;
