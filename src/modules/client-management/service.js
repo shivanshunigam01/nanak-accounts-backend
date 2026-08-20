@@ -7,7 +7,7 @@ const ClientPeriodStatus = require('../../models/ClientPeriodStatus');
 const User = require('../../models/User');
 const mongoose = require('mongoose');
 const { isFullAccessRole, hasModuleLevel } = require('../../config/modules');
-const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO, parseFlexibleDate } = require('./dates');
+const { formatLongDate, greetingPeriod, monthsSince, dstr, toISO, parseFlexibleDate, startOfDay, todayInAustralia } = require('./dates');
 const {
   buildRunsForClients,
   runBucket,
@@ -113,6 +113,10 @@ function isFirmRole(user) {
 
 function isFullAccessUser(user) {
   return user && (user.role === 'admin' || user.role === 'owner');
+}
+
+function canReassignClientManager(user) {
+  return isFullAccessUser(user) || user?.role === 'manager';
 }
 
 function escapeRegex(value) {
@@ -395,7 +399,9 @@ function basForGst(existing, gst, curQ) {
 }
 
 function payTrack(c) {
-  return c.pkg === 'On Package' && c.fee;
+  if (!c || c.status === 'Inactive') return false;
+  if (c.pkg === 'On Package') return true;
+  return !!c.gst;
 }
 
 function monthlyFee(c) {
@@ -611,10 +617,10 @@ function todayFromSettings(settings) {
         Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
       };
       const dt = new Date(Number(m[3]), months[m[2]], Number(m[1]));
-      if (!Number.isNaN(dt.getTime())) return dt;
+      if (!Number.isNaN(dt.getTime())) return startOfDay(dt);
     }
   }
-  return new Date();
+  return todayInAustralia(new Date());
 }
 
 function curLabel(settings) {
@@ -1623,7 +1629,7 @@ async function updateClient(user, id, body) {
     });
   }
 
-  if ((body.managerId !== undefined || body.managerName !== undefined) && isFullAccessUser(user)) {
+  if ((body.managerId !== undefined || body.managerName !== undefined) && canReassignClientManager(user)) {
     const resolved = await resolveManager(
       body.managerId !== undefined ? body.managerId : c.managerId,
       body.managerName !== undefined ? body.managerName : c.managerName
@@ -1639,8 +1645,8 @@ async function updateClient(user, id, body) {
     if (String(prev) !== String(c.managerName) || body.managerId !== undefined) {
       c.activity.push({ date: today, who, action: `Reallocated to ${c.managerName}` });
     }
-  } else if ((body.managerId !== undefined || body.managerName !== undefined) && !isFullAccessUser(user)) {
-    const err = new Error('Only admin/owner can assign clients to staff/managers');
+  } else if ((body.managerId !== undefined || body.managerName !== undefined) && !canReassignClientManager(user)) {
+    const err = new Error('Only owners and managers can assign clients to staff');
     err.status = 403;
     throw err;
   }
@@ -2045,10 +2051,18 @@ async function getPayments(user, query = {}) {
   let dueNow = 0;
   let overdueTotal = 0;
   const overdueIds = new Set();
+  let paymentNeeded = 0;
+  let dueCount = 0;
+  let partPaidCount = 0;
+  let paidCount = 0;
   for (const c of book) {
     const exp = payExpected(c);
     expected += exp;
     const st = payStatus(c, curQ);
+    if (st === 'Not Paid') paymentNeeded++;
+    else if (st === 'Due') dueCount++;
+    else if (st === 'Part Paid') partPaidCount++;
+    else if (st === 'Paid') paidCount++;
     if (st === 'Paid') collected += exp;
     else if (st === 'Part Paid') {
       collected += Math.round(exp / 2);
@@ -2067,8 +2081,11 @@ async function getPayments(user, query = {}) {
 
   let clients = book.filter((c) => {
     const st = payStatus(c, curQ);
+    if (f === 'needed' || f === 'payment-needed') return st === 'Not Paid';
+    if (f === 'due') return st === 'Due';
+    if (f === 'part-paid') return st === 'Part Paid';
+    if (f === 'paid' || f === 'completed') return st === 'Paid';
     if (f === 'unpaid') return isPayOutstanding(st);
-    if (f === 'due') return isPayUnpaid(st);
     if (f === 'overdue') return overdueIds.has(String(c._id));
     if (f === 'unreconciled') return !c.recon?.[curQ];
     if (f === 'lodged-unpaid') return lodgedUnpaidIds.has(String(c._id));
@@ -2118,6 +2135,10 @@ async function getPayments(user, query = {}) {
       lodgedUnpaidCount: lodgedUnpaidIds.size,
       lodgedUnpaidQuarters: exposureRows.length,
       lodgedUnpaidTotal,
+      paymentNeeded,
+      dueCount,
+      partPaidCount,
+      paidCount,
     },
     items: clients.map((c) => ({
       ...serializeClient(c),
@@ -2131,6 +2152,9 @@ async function getPayments(user, query = {}) {
       feeOverdue: monthsSince(c.feeReview) >= settings.feeReviewMonths,
       monthsSinceReview: monthsSince(c.feeReview),
       monthlyFee: monthlyFee(c),
+      basStatus: c.bas?.[curQ] || null,
+      basStatuses: Object.fromEntries(QKEYS.map((k) => [k, c.bas?.[k] || null])),
+      workDoneUnpaid: lodgedUnpaidIds.has(String(c._id)),
     })),
     modeller: {
       packageCount: book.length,
@@ -2155,7 +2179,7 @@ async function getPayments(user, query = {}) {
       })),
     },
     stale: feeStale.slice(0, 40).map(serializeClient),
-    exposure: exposureRows.slice(0, 40),
+    exposure: exposureRows,
   };
 }
 
@@ -2494,7 +2518,7 @@ async function getPayroll(user, query = {}) {
   for (let i = 0; i < 8; i++) {
     const day = addDays(todayD, i);
     const onDay = enriched.filter(
-      (r) => r.status !== 'Completed' && dayDiff(r.pay, day) === 0
+      (r) => r.when !== 'done' && dayDiff(r.pay, day) === 0
     );
     weekStrip.push({
       offset: i,
@@ -2548,7 +2572,10 @@ async function getSuper(user, query = {}) {
   const unpaid = runs.filter((r) => r.super !== 'Paid');
   const overdue = runs.filter((r) => r.superOverdue);
   const dueToday = unpaid.filter((r) => r.superWhen === 'today');
-  const dueWeek = unpaid.filter((r) => r.superWhen === 'week' || r.superWhen === 'today');
+  const dueTomorrow = unpaid.filter((r) => r.superWhen === 'tomorrow');
+  const dueWeek = unpaid.filter(
+    (r) => r.superWhen === 'week' || r.superWhen === 'today' || r.superWhen === 'tomorrow'
+  );
   const paid = runs.filter((r) => r.super === 'Paid');
   const action = filterSuperRuns(runs, 'action', todayD);
   const outstanding = unpaid;
@@ -2562,6 +2589,7 @@ async function getSuper(user, query = {}) {
       action: action.length,
       overdue: overdue.length,
       today: dueToday.length,
+      tomorrow: dueTomorrow.length,
       week: dueWeek.length,
       outstanding: outstanding.length,
       paid: paid.length,
@@ -2573,6 +2601,7 @@ async function getSuper(user, query = {}) {
       superUnpaid: unpaid.length,
       pastDeadline: overdue.length,
       dueToday: dueToday.length,
+      dueTomorrow: dueTomorrow.length,
       dueThisWeek: dueWeek.length,
       clientsAtRisk: new Set(overdue.map((r) => r.clientId)).size,
       onTimePct: runs.length

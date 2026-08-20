@@ -17,22 +17,66 @@ function parseISO(v) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-/** Accept YYYY-MM-DD or DD/MM/YYYY (and D/M/YYYY). Returns ISO date string or null. */
+const MONTH_INDEX = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+/** Local midnight for a Date (drops clock time so dayDiff is calendar-based). */
+function startOfDay(dt) {
+  if (!dt) return null;
+  const d = dt instanceof Date ? dt : new Date(dt);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Calendar date in Australia/Sydney, as local midnight. */
+function todayInAustralia(ref = new Date()) {
+  const iso = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(ref);
+  return parseISO(iso) || startOfDay(ref);
+}
+
+/** Accept YYYY-MM-DD, ISO datetime, DD/MM/YYYY, or "21 Aug 2026". Returns ISO date string or null. */
 function parseFlexibleDate(v) {
   if (!v) return null;
+  if (v instanceof Date) {
+    return Number.isNaN(v.getTime()) ? null : toISO(v);
+  }
   const s = String(v).trim();
   if (!s) return null;
+  const isoDay = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDay) {
+    const dt = new Date(Number(isoDay[1]), Number(isoDay[2]) - 1, Number(isoDay[3]));
+    if (!Number.isNaN(dt.getTime())) return toISO(dt);
+  }
   const iso = parseISO(s);
   if (iso) return toISO(iso);
   const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  if (!m) return null;
-  const day = Number(m[1]);
-  const month = Number(m[2]);
-  const year = Number(m[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  const dt = new Date(year, month - 1, day);
-  if (Number.isNaN(dt.getTime()) || dt.getDate() !== day || dt.getMonth() !== month - 1) return null;
-  return toISO(dt);
+  if (m) {
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const dt = new Date(year, month - 1, day);
+    if (Number.isNaN(dt.getTime()) || dt.getDate() !== day || dt.getMonth() !== month - 1) return null;
+    return toISO(dt);
+  }
+  const named = s.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
+  if (named) {
+    const mo = MONTH_INDEX[named[2].slice(0, 3).toLowerCase()];
+    const day = Number(named[1]);
+    const year = Number(named[3]);
+    if (mo === undefined || day < 1 || day > 31) return null;
+    const dt = new Date(year, mo, day);
+    if (Number.isNaN(dt.getTime()) || dt.getDate() !== day) return null;
+    return toISO(dt);
+  }
+  return null;
 }
 
 function addDays(dt, n) {
@@ -42,7 +86,10 @@ function addDays(dt, n) {
 }
 
 function dayDiff(a, b) {
-  return Math.round((a - b) / 86400000);
+  const da = startOfDay(a);
+  const db = startOfDay(b);
+  if (!da || !db) return 0;
+  return Math.round((da.getTime() - db.getTime()) / 86400000);
 }
 
 function dstr(dt) {
@@ -109,6 +156,8 @@ module.exports = {
   toISO,
   parseISO,
   parseFlexibleDate,
+  startOfDay,
+  todayInAustralia,
   addDays,
   dayDiff,
   dstr,
