@@ -348,12 +348,12 @@ footer a:hover{color:var(--orange)}
    ===================================================== */
 const LEAD_API_URL = (function () {
   try {
-    var h = location.hostname || "";
-    if (h.indexOf("connect.cavaluer.com") !== -1 || h === "localhost" || h === "127.0.0.1") {
+    var h = (location.hostname || "").toLowerCase();
+    if (h === "localhost" || h === "127.0.0.1" || h === "api.cavaluer.com") {
       return "/api/leads";
     }
   } catch (e) {}
-  return "https://api.connect.cavaluer.com/api/leads";
+  return "https://api.cavaluer.com/api/leads";
 })();
 const LEAD_SOURCE = "pay_calculator";
 

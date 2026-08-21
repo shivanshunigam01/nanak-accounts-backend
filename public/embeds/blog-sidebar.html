@@ -188,12 +188,12 @@
 (function(){
   var LEAD_API = (function () {
     try {
-      var h = location.hostname || '';
-      if (h.indexOf('connect.cavaluer.com') !== -1 || h === 'localhost' || h === '127.0.0.1') {
+      var h = (location.hostname || '').toLowerCase();
+      if (h === 'localhost' || h === '127.0.0.1' || h === 'api.cavaluer.com') {
         return '/api/leads';
       }
     } catch (e) {}
-    return 'https://api.connect.cavaluer.com/api/leads';
+    return 'https://api.cavaluer.com/api/leads';
   })();
   var LEAD_SOURCE = 'blog';
 

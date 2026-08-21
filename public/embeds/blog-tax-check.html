@@ -178,7 +178,13 @@
 <script>
 (function(){
   var API_BASE = (function () {
-    try { return location.origin; } catch (e) { return 'https://api.connect.cavaluer.com'; }
+    try {
+      var h = (location.hostname || "").toLowerCase();
+      if (h === "localhost" || h === "127.0.0.1" || h === "api.cavaluer.com") {
+        return location.origin;
+      }
+    } catch (e) {}
+    return "https://api.cavaluer.com";
   })();
   var qs = new URLSearchParams(location.search || '');
   var articleTitle = document.title || null;
