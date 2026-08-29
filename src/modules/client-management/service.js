@@ -13,6 +13,7 @@ const {
   runBucket,
   runWhen,
   stpBreaches,
+  stpOutstandingAll,
   filterSuperRuns,
   superBucket,
   sortSuperRuns,
@@ -119,6 +120,20 @@ function canReassignClientManager(user) {
   return isFullAccessUser(user) || user?.role === 'manager';
 }
 
+function canReassignClientOn(user, c) {
+  if (!user || !c) return false;
+  if (!canReassignClientManager(user)) return false;
+  return (
+    hasModuleLevel(user, 'cm-clients', 'view') ||
+    hasModuleLevel(user, 'client-management', 'view')
+  );
+}
+
+function isReassignOnlyBody(body) {
+  const keys = Object.keys(body || {}).filter((k) => body[k] !== undefined);
+  return keys.length > 0 && keys.every((k) => k === 'managerId' || k === 'managerName');
+}
+
 function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -222,10 +237,11 @@ function pickBestUser(candidates) {
   return [...candidates].sort((a, b) => teamMemberScore(b) - teamMemberScore(a))[0];
 }
 
-/** Firm-wide edit with module edit/full; staff & managers also edit clients assigned to them (My Clients). */
+/** Firm-wide edit with module edit/full; managers also edit any client when they have cm-clients edit. */
 function canEditClient(user, c) {
   if (!user || !c) return false;
   if (isFullAccessUser(user)) return true;
+  if (user.role === 'manager' && hasModuleLevel(user, 'cm-clients', 'edit')) return true;
   if (hasModuleLevel(user, 'cm-clients', 'edit')) return true;
   if (
     (user.role === 'staff' || user.role === 'manager') &&
@@ -961,7 +977,7 @@ async function getDashboard(user) {
   const newCount = clients.filter((c) => c.isNewClient).length;
   const attention = clients.filter((c) => (c.gst && c.bas?.[curQ] === 'Not Completed') || hasWarn(c));
   const odRuns = runs.filter((r) => runBucket(r, today) === 'overdue');
-  const stpB = stpBreaches(runs);
+  const stpB = stpBreaches(runs, today);
   const inactiveClients = await PracticeClient.countDocuments(
     isFirmRole(user) ? { status: 'Inactive' } : { status: 'Inactive', ...staffAllocationFilter(user) }
   );
@@ -1342,6 +1358,7 @@ async function getClient(user, id) {
   }
 
   const canEdit = canEditClient(user, c);
+  const canReassign = canReassignClientOn(user, c);
   const canEditPayroll = canManagePayrollClient(user, c);
   const memberSerialized = members.map(serializeClient);
   const managers = [...new Set(memberSerialized.map((m) => m.managerName).filter(Boolean))];
@@ -1372,6 +1389,7 @@ async function getClient(user, id) {
       payrollUnderBilled: payrollUnderBilled(c, settings.payrollRate),
       owing: payOwing(c, settings.currentQuarter),
       canEdit,
+      canReassign,
       canEditPayroll,
     },
   };
@@ -1503,10 +1521,23 @@ async function updateClient(user, id, body) {
     err.status = 404;
     throw err;
   }
-  if (!canEditClient(user, c)) {
-    const err = new Error('You can view this client but cannot edit clients assigned to others');
+  const wantsReassign = body.managerId !== undefined || body.managerName !== undefined;
+  const canEdit = canEditClient(user, c);
+  const canReassign = canReassignClientOn(user, c);
+  if (!canEdit && !(wantsReassign && canReassign && isReassignOnlyBody(body))) {
+    const err = new Error(
+      wantsReassign && canReassign
+        ? 'You can reassign the client manager but cannot edit other details on this client'
+        : 'You can view this client but cannot edit clients assigned to others'
+    );
     err.status = 403;
     throw err;
+  }
+  if (!canEdit && canReassign && wantsReassign) {
+    body = {
+      managerId: body.managerId,
+      managerName: body.managerName,
+    };
   }
   const settings = await getSettings();
   const curQ = settings.currentQuarter;
@@ -1951,8 +1982,16 @@ async function linkGroup(user, body) {
  * or { groupId, managerId } reassigns the whole group.
  */
 async function consolidateGroup(user, body) {
-  if (!isFullAccessRole(user.role)) {
-    const err = new Error('Only admin can consolidate group managers');
+  if (!canReassignClientManager(user)) {
+    const err = new Error('Only owners and managers can consolidate group managers');
+    err.status = 403;
+    throw err;
+  }
+  if (
+    !hasModuleLevel(user, 'cm-groups', 'edit') &&
+    !hasModuleLevel(user, 'cm-clients', 'edit')
+  ) {
+    const err = new Error('You do not have permission to reassign group managers');
     err.status = 403;
     throw err;
   }
@@ -2474,7 +2513,8 @@ async function getPayroll(user, query = {}) {
   const wk = enriched.filter((r) => r.when === 'week' || r.when === 'today' || r.when === 'tomorrow');
   const later = enriched.filter((r) => r.when === 'later');
   const flags = enriched.filter((r) => r.billingFlag);
-  const stpB = stpBreaches(enriched);
+  const stpAll = stpOutstandingAll(enriched);
+  const stpB = stpBreaches(enriched, todayD);
   const superAction = filterSuperRuns(enriched, 'action', todayD);
   const superOd = enriched.filter((r) => r.superOverdue);
   const seen = {};
@@ -2504,7 +2544,7 @@ async function getPayroll(user, query = {}) {
     today: td,
     tomorrow: tm,
     week: wk,
-    stp: stpB,
+    stp: stpAll,
     super: superAction,
     flags,
     later,
@@ -2542,7 +2582,8 @@ async function getPayroll(user, query = {}) {
       week: wk.length,
       upcoming: later.length,
       done: enriched.filter((r) => r.when === 'done').length,
-      stp: stpB.length,
+      stp: stpAll.length,
+      stpDue: stpB.length,
       super: superAction.length,
       flags: flags.length,
       all: enriched.length,
@@ -2568,7 +2609,7 @@ async function getPayroll(user, query = {}) {
 async function getSuper(user, query = {}) {
   const { runs, today } = await loadPayrollRuns(user);
   const todayD = today instanceof Date ? today : new Date(today);
-  const f = query.filter || 'outstanding';
+  const f = query.filter || 'action';
   const unpaid = runs.filter((r) => r.super !== 'Paid');
   const overdue = runs.filter((r) => r.superOverdue);
   const dueToday = unpaid.filter((r) => r.superWhen === 'today');
@@ -2578,7 +2619,8 @@ async function getSuper(user, query = {}) {
   );
   const paid = runs.filter((r) => r.super === 'Paid');
   const action = filterSuperRuns(runs, 'action', todayD);
-  const outstanding = unpaid;
+  const outstanding = filterSuperRuns(runs, 'outstanding', todayD);
+  const upcoming = filterSuperRuns(runs, 'upcoming', todayD);
   const filtered = sortSuperRuns(filterSuperRuns(runs, f, todayD));
 
   return {
@@ -2592,13 +2634,14 @@ async function getSuper(user, query = {}) {
       tomorrow: dueTomorrow.length,
       week: dueWeek.length,
       outstanding: outstanding.length,
+      upcoming: upcoming.length,
       paid: paid.length,
       all: runs.length,
     },
     kpis: {
       totalRuns: runs.length,
       superPaid: paid.length,
-      superUnpaid: unpaid.length,
+      superUnpaid: outstanding.length,
       pastDeadline: overdue.length,
       dueToday: dueToday.length,
       dueTomorrow: dueTomorrow.length,

@@ -411,10 +411,16 @@ function getModuleLevel(user, moduleKey) {
   return normalizeLevel(effectiveAccess(user)[moduleKey] || 'none');
 }
 
+/** Edit grants the same operational access as full for permission checks. */
+function permissionRank(level) {
+  const l = normalizeLevel(level);
+  return l === 'edit' || l === 'full' ? RANK.full : RANK[l];
+}
+
 function hasModuleLevel(user, moduleKey, minLevel = 'view') {
   if (isFullAccessRole(user?.role)) return true;
   const need = normalizeLevel(minLevel);
-  return RANK[getModuleLevel(user, moduleKey)] >= RANK[need];
+  return permissionRank(getModuleLevel(user, moduleKey)) >= RANK[need];
 }
 
 /**

@@ -232,10 +232,3 @@ exports.getOnboardingManagerFiles = asyncHandler(async (req, res) => {
   res.json({ success: true, data });
 });
 
-exports.seedOnboarding = asyncHandler(async (req, res) => {
-  if (!isFullAccessRole(req.user.role)) {
-    return res.status(403).json({ success: false, message: 'Admin only' });
-  }
-  const data = await onboardingSvc.seedOnboarding(req.user);
-  res.json({ success: true, ...data });
-});

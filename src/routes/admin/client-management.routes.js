@@ -59,6 +59,4 @@ router.get('/onboarding/entities', requireModule('cm-onboarding'), c.listOnboard
 router.post('/onboarding/entities', requireModuleLevel('cm-onboarding', 'edit'), c.createOnboardingEntity);
 router.get('/onboarding/entities/:id', requireModule('cm-onboarding'), c.getOnboardingEntity);
 router.patch('/onboarding/entities/:id', requireModuleLevel('cm-onboarding', 'edit'), c.updateOnboardingEntity);
-router.post('/onboarding/seed', requireModuleLevel('client-management', 'full'), c.seedOnboarding);
-
 module.exports = router;

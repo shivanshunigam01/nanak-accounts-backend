@@ -523,115 +523,6 @@ async function getManagerFiles() {
   return groups.sort((a, b) => a.manager.localeCompare(b.manager));
 }
 
-function allThrough(gateNum) {
-  return NEW_GATES.filter((g) => g.num <= gateNum).flatMap((g) => g.items.map((i) => i.id));
-}
-
-async function seedOnboarding(user) {
-  const count = await OnboardingEntity.countDocuments();
-  if (count > 0) {
-    const err = new Error('Onboarding data already exists');
-    err.statusCode = 409;
-    throw err;
-  }
-
-  const DAY = DAY_MS;
-  const daysAgo = (n) => new Date(Date.now() - n * DAY);
-  const managers = await cmSvc.listAssignableTeamMembers();
-  const pick = (i) => managers[i % managers.length]?.name || 'Unassigned';
-
-  const seeds = [
-    {
-      name: 'Harjit Transport Pty Ltd',
-      track: 'new',
-      pkg: 'Company',
-      managerName: pick(0),
-      createdAt: daysAgo(9),
-      contact: {
-        person: 'Harjit Singh',
-        phone: '0421 884 220',
-        email: 'harjit@harjittransport.com.au',
-      },
-      done: [...allThrough(2), 'g3a', 'g3b', 'g3c', 'g3e'],
-      tri: { asic: true, abr: true, ato: false },
-      gateStart: new Map([['g1', daysAgo(9)], ['g3', daysAgo(6)]]),
-      notes: {
-        background:
-          'Interstate line-haul, 4 trucks, ~$1.8M revenue, quarterly GST. Left previous accountant over slow BAS turnaround.',
-        atoPosition: '2 BAS outstanding (Dec, Mar). Payment plan on ICA — $14,200 remaining.',
-      },
-      log: [
-        { text: 'Entity created — package: Company', at: daysAgo(9) },
-        { text: 'Gate 1 cleared by Sales', at: daysAgo(8) },
-        { text: 'Gate 2 cleared — AML complete, risk: medium', at: daysAgo(6) },
-        { text: 'Address mismatch found — ATO still shows old Tarneit address', at: daysAgo(2) },
-      ],
-    },
-    {
-      name: 'Gill Bros Concreting Pty Ltd',
-      track: 'renewal',
-      pkg: 'Company',
-      managerName: pick(4),
-      createdAt: daysAgo(2),
-      contact: {
-        person: 'Manpreet Gill',
-        phone: '0412 335 678',
-        email: 'manpreet@gillbros.com.au',
-      },
-      done: ['r1a', 'r1b', 'r2a'],
-      tri: { asic: false, abr: false, ato: false },
-      gateStart: new Map([['r1', daysAgo(2)], ['r2', daysAgo(1)]]),
-      notes: {
-        background: 'Existing client since FY24. Residential concreting, 3 staff.',
-        atoPosition: '',
-      },
-      log: [
-        { text: 'Renewal opened — FY2026-27', at: daysAgo(2) },
-        { text: 'Gate 1 cleared — renewal signed', at: daysAgo(1) },
-      ],
-    },
-    {
-      name: 'BrickWorks Renovations Pty Ltd',
-      track: 'new',
-      pkg: 'Company',
-      managerName: pick(2),
-      createdAt: daysAgo(13),
-      contact: {
-        person: 'Tony Marino',
-        phone: '0438 006 172',
-        email: 'tony@brickworksreno.com.au',
-      },
-      done: [...allThrough(4), 'g5a', 'g5b'],
-      tri: { asic: true, abr: true, ato: true },
-      gateStart: new Map([['g1', daysAgo(13)], ['g5', daysAgo(1)]]),
-      notes: {
-        background:
-          'Domestic renos + small commercial fit-outs. 6 staff, ~$2.4M revenue, monthly IAS. Referral from Manan.',
-        atoPosition: 'All lodgements current. No debt.',
-      },
-      log: [
-        { text: 'Entity created — package: Company', at: daysAgo(13) },
-        { text: 'Gate 3 cleared — three-way address match confirmed', at: daysAgo(5) },
-        { text: 'Gate 4 cleared — handed to Aditya for review', at: daysAgo(1) },
-      ],
-    },
-  ];
-
-  for (const s of seeds) {
-    const resolved = await cmSvc.resolveManager(null, s.managerName);
-    await OnboardingEntity.create({
-      ...s,
-      managerId: resolved.managerId,
-      managerName: resolved.managerName,
-      status: 'active',
-      handoverPack: '',
-      createdBy: user._id,
-    });
-  }
-
-  return { seeded: seeds.length };
-}
-
 module.exports = {
   getMeta,
   getDashboard,
@@ -641,7 +532,6 @@ module.exports = {
   updateEntity,
   searchClients,
   getManagerFiles,
-  seedOnboarding,
   buildHandoverPack,
   enrichEntity,
 };
