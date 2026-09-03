@@ -1692,6 +1692,20 @@ async function updateClient(user, id, body) {
       }
     }
   }
+  // Keep denormalized annual in sync with the period store (list views don't hydrate).
+  if (body.annual !== undefined) {
+    const nextAnnual = String(body.annual || '').trim();
+    const allowedAnnual = ['Not Started', 'In Progress', 'Lodged', 'Not Required'];
+    if (!allowedAnnual.includes(nextAnnual)) {
+      const err = new Error('Not saved - pick a valid annual status');
+      err.status = 400;
+      throw err;
+    }
+    if (c.annual !== nextAnnual) {
+      c.annual = nextAnnual;
+      c.activity.push({ date: today, who, action: `Annual return set to ${nextAnnual}` });
+    }
+  }
   // Invoice numbers are applied first so a payment + its invoice can arrive in one request.
   const mergedInv = { ...(c.inv || {}) };
   if (body.inv && typeof body.inv === 'object') {
