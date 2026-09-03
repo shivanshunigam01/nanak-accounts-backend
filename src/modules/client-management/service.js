@@ -550,15 +550,17 @@ function assertInvoiceForPayment(payStatusValue, invoiceNo) {
   throw err;
 }
 
-/** Applies an Active <-> Inactive transition from `body.status` / `body.exit`. Admin only. */
+/** Applies an Active <-> Inactive transition from `body.status` / `body.exit`.
+ * Staff/managers who can edit the client may mark inactive or reactivate (same as other profile edits).
+ */
 function applyLifecycleChange(user, c, body, today, who) {
   if (body.status === undefined) return;
   const next = body.status === 'Inactive' ? 'Inactive' : 'Active';
   const current = c.status || 'Active';
   if (next === current) return;
 
-  if (!isFullAccessRole(user.role)) {
-    const err = new Error('Only admin can make a client inactive or reactivate them');
+  if (!canEditClient(user, c)) {
+    const err = new Error('You do not have permission to change this client\'s active status');
     err.status = 403;
     throw err;
   }
